@@ -122,21 +122,24 @@ function makeInstances(geo, mat, matrices) {
   return mesh;
 }
 
-export function createFacadeDepth() {
-  const frames = [];
-  const glasses = [];
-  const grilles = [];
-  const sills = [];
-  const hoods = [];
-  const acs = [];
-  const reveals = [];
-  const drips = [];
-  const recesses = [];
+function createDepthBucket() {
+  return {
+    frames: [], glasses: [], grilles: [], sills: [], hoods: [], acs: [], reveals: [], drips: [], recesses: [],
+  };
+}
 
-  function addBuilding({ hero = false, recessed = false, plans = null, ...options }) {
+export function createFacadeDepth() {
+  const buckets = { always: createDepthBucket(), near: createDepthBucket(), far: createDepthBucket() };
+
+  function addBuilding({ hero = false, recessed = false, plans = null, streetLayer = null, atlasEdges = null, ...options }) {
     const faces = plans || planBuildingOpenings({ ...options, hero });
     let count = 0;
     for (const { edge: face, openings } of faces) {
+      const onAtlas = !atlasEdges || atlasEdges.has(face.index);
+      const bucket = onAtlas && (streetLayer === "near" || streetLayer === "far")
+        ? buckets[streetLayer]
+        : buckets.always;
+      const { frames, glasses, grilles, sills, hoods, acs, reveals, drips, recesses } = bucket;
       const dx = face.b.x - face.a.x;
       const dz = face.b.z - face.a.z;
       for (const opening of openings) {
@@ -182,27 +185,45 @@ export function createFacadeDepth() {
     const stoneMat = new THREE.MeshLambertMaterial({ color: 0xc9c3b6 });
     const acMat = new THREE.MeshLambertMaterial({ color: 0xd7dcde });
     const revealMat = new THREE.MeshLambertMaterial({ color: 0x303944 });
-    const parts = [
-      ["facade-reveals", REVEAL, revealMat, reveals],
-      ["facade-window-recesses", RECESS, stoneMat, recesses],
-      ["facade-frames", FRAME, frameMat, frames],
-      ["facade-glass", GLASS, glassMat, glasses],
-      ["facade-grilles", GRILLE, ironMat, grilles],
-      ["facade-sills", SILL, stoneMat, sills],
-      ["facade-hoods", HOOD, stoneMat, hoods],
-      ["facade-drips", DRIP, stoneMat, drips],
-      ["facade-acs", AC, acMat, acs],
-    ];
-    let windows = 0;
-    for (const [name, geo, mat, list] of parts) {
-      const mesh = makeInstances(geo, mat, list);
-      if (!mesh) continue;
-      mesh.name = name;
-      group.add(mesh);
-      if (name === "facade-frames") windows = list.length;
-    }
-    return { windows, grilles: grilles.length, acs: acs.length, heroWindows: reveals.length,
-      recessedWindows: recesses.length };
+    const emit = (parent, bucket) => {
+      const parts = [
+        ["facade-reveals", REVEAL, revealMat, bucket.reveals],
+        ["facade-window-recesses", RECESS, stoneMat, bucket.recesses],
+        ["facade-frames", FRAME, frameMat, bucket.frames],
+        ["facade-glass", GLASS, glassMat, bucket.glasses],
+        ["facade-grilles", GRILLE, ironMat, bucket.grilles],
+        ["facade-sills", SILL, stoneMat, bucket.sills],
+        ["facade-hoods", HOOD, stoneMat, bucket.hoods],
+        ["facade-drips", DRIP, stoneMat, bucket.drips],
+        ["facade-acs", AC, acMat, bucket.acs],
+      ];
+      let frames = 0;
+      for (const [name, geo, mat, list] of parts) {
+        const mesh = makeInstances(geo, mat, list);
+        if (!mesh) continue;
+        mesh.name = name;
+        parent.add(mesh);
+        if (name === "facade-frames") frames += list.length;
+      }
+      return frames;
+    };
+    const layer = (name, nearDetail, bucket) => {
+      const occupied = bucket.frames.length || bucket.glasses.length || bucket.recesses.length
+        || bucket.grilles.length || bucket.sills.length || bucket.hoods.length || bucket.acs.length
+        || bucket.reveals.length || bucket.drips.length;
+      if (!occupied) return 0;
+      const holder = new THREE.Group();
+      holder.name = name;
+      holder.userData = { facadeLayer: "realistic-street", nearDetail };
+      group.add(holder);
+      return emit(holder, bucket);
+    };
+    const windows = emit(group, buckets.always)
+      + layer("facade-depth-near", true, buckets.near)
+      + layer("facade-depth-far", false, buckets.far);
+    const sum = (key) => buckets.always[key].length + buckets.near[key].length + buckets.far[key].length;
+    return { windows, grilles: sum("grilles"), acs: sum("acs"), heroWindows: sum("reveals"),
+      recessedWindows: sum("recesses") };
   }
 
   return { addBuilding, finish };

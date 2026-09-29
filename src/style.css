@@ -34,7 +34,8 @@ body {
 .hud p { margin: 0.2rem 0; line-height: 1.45; }
 .hud .muted { color: #d9cbb6; font-size: 0.88rem; }
 
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.actions, .facade-modes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.facade-modes { margin-top: 8px; }
 .actions button[hidden] { display: none; }
 button {
   appearance: none;
@@ -176,7 +177,7 @@ button.is-on, button:hover { background: var(--accent); border-color: transparen
 
 @media (max-width: 700px), (pointer: coarse) {
   .hud { inset: 8px 8px auto; width: auto; padding: 10px 12px; }
-  .hud .muted#meta, .hud .muted#hint, .credit { display: none; }
+  .hud .muted#meta, .hud .muted#hint, .hud .muted#facadeNote, .credit { display: none; }
   #lockHint, #lockHint.is-on { display: none; }
   .actions { margin-top: 6px; }
   .farm-sync { top: 184px; bottom: auto; left: 50%; right: auto; transform: translateX(-50%); white-space: nowrap; }

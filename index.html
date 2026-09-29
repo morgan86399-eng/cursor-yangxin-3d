@@ -24,6 +24,12 @@
       <button id="walkBtn" type="button">第一視角</button>
       <button id="lockBtn" type="button" hidden aria-pressed="false">鎖定滑鼠</button>
     </div>
+    <div class="facade-modes" role="group" aria-label="立面樣式">
+      <button id="facadeRealisticBtn" type="button" aria-pressed="false">寫實立面</button>
+      <button id="facadeMixedBtn" type="button" class="is-on" aria-pressed="true">混合</button>
+      <button id="facade25dBtn" type="button" aria-pressed="false">2.5D 招牌樓</button>
+    </div>
+    <p class="muted" id="facadeNote">混合：50 公尺內維持現有立面，較遠街面為程序化 2.5D 招牌樓（示意窗格與招牌帶，不是實景）。</p>
     <p class="muted" id="hint">拖曳旋轉、滾輪縮放。點「第一視角」可在平地移動、跳躍，撞到房子會被擋住。</p>
   </aside>
   <aside id="near50Panel" class="near50-panel" aria-labelledby="near50Title" hidden>
@@ -48,10 +54,10 @@
     <button data-move="s" aria-label="向後">▼</button>
     <button data-move="d" aria-label="向右">▶</button>
   </div>
-  <p class="model-note">46號3層、48號5層依現地目視；建物米高、立面與招牌外觀、路面與地坪色彩含推估，門前尚未影像校準。</p>
+  <p class="model-note">46號3層、48號5層依現地目視；建物米高、立面與招牌外觀、路面與地坪色彩含推估，門前尚未影像校準。遠處 2.5D 招牌樓是程序化窗格與招牌帶，不是實景街廓。</p>
   <details class="legal-note">
     <summary>模型推估與使用說明</summary>
-    <p>46號3層、48號5層依現地目視；建物米高、立面與招牌外觀、路面與地坪色彩仍含推估，門前尚未影像校準。</p>
+    <p>46號3層、48號5層依現地目視；建物米高、立面與招牌外觀、路面與地坪色彩仍含推估，門前尚未影像校準。遠處 2.5D 招牌樓是程序化窗格與招牌帶，不是實景街廓。</p>
     <p>本場景為虛擬遊戲內容；建築、道路與地址僅作公開地理資料參考，不代表土地所有權、官方合作或現實耕作許可。請勿依遊戲指示進入私人土地。</p>
     <p><a href="./data/ground-surface-evidence.json" target="_blank" rel="noopener">路面與地坪資料來源及可信度</a></p>
     <p><a href="./data/near50-floor-evidence.json" target="_blank" rel="noopener">50公尺建物樓層對位及未驗部分</a></p>

@@ -71,6 +71,24 @@ assert.equal(depthModule.addBuilding({ hero: true, recessed: true, plans: [{
 }] }), 1);
 const apertureDetails = new THREE.Group();
 assert.equal(depthModule.finish(apertureDetails).recessedWindows, 1);
+const farDepth = createFacadeDepth();
+assert.equal(farDepth.addBuilding({
+  hero: false,
+  recessed: false,
+  streetLayer: "far",
+  plans: [{
+    edge: { a: apertureRing[0], b: apertureRing[1], nx: 0, nz: -1, yaw: Math.PI, len: 5 },
+    openings: [{ t: 0.5, y: 4.5, sx: 1, sy: 1, grille: false, hood: false, ac: false }],
+  }],
+}), 1);
+const farDetails = new THREE.Group();
+assert.equal(farDepth.finish(farDetails).windows, 1);
+const farHolder = farDetails.getObjectByName("facade-depth-far");
+assert.equal(farHolder?.userData.facadeLayer, "realistic-street");
+assert.equal(farHolder?.userData.nearDetail, false);
+assert.equal(farDetails.children.some((child) => child.name === "facade-frames"), false,
+  "distant 2.5D street windows must live on a layer that can hide with the realistic shell");
+assert.ok(farHolder.getObjectByName("facade-frames"));
 const glassMatrix = new THREE.Matrix4();
 apertureDetails.getObjectByName("facade-glass").getMatrixAt(0, glassMatrix);
 assert.ok(glassMatrix.elements[14] > 0.1, "near-field glass must be behind the z=0 wall plane");
