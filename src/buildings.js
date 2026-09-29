@@ -856,7 +856,11 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
       if (atlasGeo && atlasRecipe) {
         const atlasMesh = new THREE.Mesh(
           atlasGeo,
-          facadeAtlasMaterial(atlasRecipe.kind, atlasRecipe.floors, atlasRecipe.variant)
+          facadeAtlasMaterial(atlasRecipe.kind, atlasRecipe.floors, atlasRecipe.variant, {
+            // A physical fascia already names this frontage. Skip the painted
+            // sign band so the atlas and the extruded board are not both signs.
+            paintedSign: !(groundShop || upperShop),
+          })
         );
         atlasMesh.name = "facade-atlas-25d";
         atlasMesh.userData = {
@@ -865,6 +869,7 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
           facadeLayer: "atlas25d",
           nearDetail: lot.nearDetail,
           recipe: atlasRecipe.key,
+          paintedSign: !(groundShop || upperShop),
           recipeKind: atlasRecipe.kind,
           recipeLabel: atlasRecipe.label,
           floors: atlasRecipe.floors,

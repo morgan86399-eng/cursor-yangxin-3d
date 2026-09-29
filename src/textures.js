@@ -911,8 +911,9 @@ export function makeShopSignTexture(shop) {
       ctx.lineWidth = 6;
       ctx.strokeRect(40, 36, 944, 184);
       ctx.fillStyle = ink || "#fff8ea";
-      const title = name.length > 12 ? name.slice(0, 12) : name;
-      ctx.font = "bold 54px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
+      const title = name;
+      const size = title.length > 16 ? 36 : title.length > 12 ? 42 : title.length > 9 ? 48 : 54;
+      ctx.font = `bold ${size}px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif`;
       ctx.fillText(title, 512, sub ? 108 : 128);
       if (sub) {
         ctx.font = "32px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";

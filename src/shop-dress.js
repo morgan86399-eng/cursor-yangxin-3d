@@ -89,23 +89,67 @@ function addFasciaBoard(group, edge, opts) {
   return board;
 }
 
-function addValanceAwning(group, edge, y, color, width) {
+function addValanceAwning(group, edge, y, color, width, fit = null) {
   const w = width || Math.min(edge.len * 0.92, 8.2);
+  const depth = fit?.depth ?? 1.05;
+  const out = fit?.out ?? 0.62;
   const mat = new THREE.MeshLambertMaterial({ color });
   const barMat = new THREE.MeshLambertMaterial({ color: 0x3a342e });
-  const awning = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, 1.05), mat);
-  awning.position.set(edge.mx + edge.nx * 0.62, y, edge.mz + edge.nz * 0.62);
+  const awning = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, depth), mat);
+  awning.position.set(edge.mx + edge.nx * out, y, edge.mz + edge.nz * out);
   awning.rotation.y = edge.yaw;
-  awning.rotation.x = -0.12;
+  // A deep canopy keeps the original tilt. A board-backed valance stays flat
+  // so the slab cannot tip through the lettering.
+  if (!fit) awning.rotation.x = -0.12;
+  awning.userData = { kind: "awning", estimated: true };
   group.add(awning);
+  const outer = fit ? out + depth / 2 : 1.12;
   const lip = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, 0.05), mat);
-  lip.position.set(edge.mx + edge.nx * 1.12, y - 0.12, edge.mz + edge.nz * 1.12);
+  lip.position.set(edge.mx + edge.nx * outer, y - 0.12, edge.mz + edge.nz * outer);
   lip.rotation.y = edge.yaw;
+  lip.userData = { kind: "awning-lip", estimated: true };
   group.add(lip);
+  const barOut = fit ? outer + 0.02 : 1.14;
   const bar = new THREE.Mesh(new THREE.BoxGeometry(w, 0.03, 0.03), barMat);
-  bar.position.set(edge.mx + edge.nx * 1.14, y - 0.24, edge.mz + edge.nz * 1.14);
+  bar.position.set(edge.mx + edge.nx * barOut, y - 0.24, edge.mz + edge.nz * barOut);
   bar.rotation.y = edge.yaw;
   group.add(bar);
+}
+
+/** Width and height of the fascia boards dressShopLot will extrude for this frontage. */
+export function reservedFasciaSlots(edge, storey, opts = {}) {
+  if (!edge || edge.len < 1.8) return [];
+  const { groundShop, upperShop, isShop } = opts;
+  const paired = Boolean(isShop || groundShop?.brand === "yashanyuan" || upperShop?.brand === "yangxin");
+  if (paired) return [];
+  const slots = [];
+  const w = Math.min(Math.max(edge.len * 0.78, 2.35), 4.6);
+  if (groundShop && isChainStore(groundShop.brand)) {
+    slots.push({
+      edgeIndex: edge.index, len: edge.len, t: 0.5,
+      width: Math.min(Math.max(edge.len * 0.88, 3.4), 6.4),
+      y: 3.18, height: 0.78, name: groundShop.name || "",
+    });
+  } else if (groundShop?.name) {
+    slots.push({
+      edgeIndex: edge.index, len: edge.len, t: 0.5, width: w, y: 2.48, height: 0.78,
+      name: groundShop.name,
+    });
+    if ((groundShop.name || "").length <= 6) {
+      const bladeT = Math.max(0.31 / edge.len, Math.min(1 - 0.31 / edge.len, 0.08));
+      slots.push({
+        edgeIndex: edge.index, len: edge.len, t: isNearSign(edge) ? bladeT : 0.08,
+        width: 0.62, y: 2.05, height: 1.45, name: groundShop.name,
+      });
+    }
+  }
+  if (upperShop?.name) {
+    slots.push({
+      edgeIndex: edge.index, len: edge.len, t: 0.5, width: w * 0.88,
+      y: (storey || 3.12) + 0.95, height: 0.7, name: upperShop.name,
+    });
+  }
+  return slots;
 }
 
 function addBrandCanopy(group, edge, brand) {
@@ -641,7 +685,18 @@ export function dressShopLot(group, pts, roads, storey, opts) {
   } else if (groundShop?.name) {
     const seed = hash01(groundShop.name, 2);
     const awningTones = [0xb08968, 0x8b2c24, 0x2c4a7a, 0x2d6a4f, 0xc45c26];
-    addValanceAwning(group, edge, 2.1, awningTones[Math.floor(seed * awningTones.length)]);
+    // The lettered board sits at out ≈ 0.41. Keep the valance on the wall
+    // behind that face and below the lettering so it cannot pierce the name.
+    const fasciaY = 2.48;
+    const fasciaH = 0.78;
+    addValanceAwning(
+      group,
+      edge,
+      fasciaY - fasciaH / 2 - 0.18,
+      awningTones[Math.floor(seed * awningTones.length)],
+      Math.min(edge.len * 0.92, 8.2),
+      { depth: 0.22, out: 0.16 },
+    );
     addFasciaBoard(group, edge, {
       y: 2.48,
       w,

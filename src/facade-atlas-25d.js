@@ -222,13 +222,14 @@ function paintSign(ctx, x, y, w, h, color, depth) {
   }
 }
 
-export function facadeDetailPlan(kind, variant) {
+export function facadeDetailPlan(kind, variant, options = {}) {
   const safeKind = WALLS[kind] ? kind : "shophouse";
   const v = Math.abs(variant | 0) % FACADE_25D_VARIANT_COUNT;
   const shop = safeKind === "shophouse";
   const apt = safeKind === "apt";
   const mid = safeKind === "mid";
   const civic = safeKind === "civic";
+  const paintedSign = options.paintedSign !== false;
   return {
     kind: safeKind,
     variant: v,
@@ -240,7 +241,8 @@ export function facadeDetailPlan(kind, variant) {
     balcony: apt,
     acUnit: (apt || mid || shop) && (v === 1 || v === 3),
     pipe: (apt || mid || shop) && (v === 1 || v === 3),
-    signDepth: shop || mid || civic,
+    paintedSign,
+    signDepth: paintedSign && (shop || mid || civic),
     shopBays: shop ? (v % 2 === 0 ? 2 : 3) : (mid ? 2 : 0),
     nightGlass: v === 1 || v === 3,
   };
@@ -320,8 +322,8 @@ function paintShopBays(ctx, y, bays, floorH) {
   }
 }
 
-export function paintFacadeAtlas(ctx, kind, floors, variant) {
-  const plan = facadeDetailPlan(kind, variant);
+export function paintFacadeAtlas(ctx, kind, floors, variant, options = {}) {
+  const plan = facadeDetailPlan(kind, variant, options);
   const safeKind = plan.kind;
   const safeFloors = Math.max(1, Math.min(14, Math.round(floors) || 1));
   const safeVariant = plan.variant;
@@ -338,7 +340,7 @@ export function paintFacadeAtlas(ctx, kind, floors, variant) {
     ctx.fillRect(0, y, width, 3);
     if (safeKind === "shophouse" && floor === 0) {
       if (plan.rainCover) paintRainCover(ctx, y);
-      paintSign(ctx, 8, y + 8, BAY_PX - 16, 14, SIGNS[safeVariant], plan.signDepth);
+      if (plan.paintedSign) paintSign(ctx, 8, y + 8, BAY_PX - 16, 14, SIGNS[safeVariant], plan.signDepth);
       if (plan.awning) paintAwning(ctx, y);
       paintShopBays(ctx, y, plan.shopBays || 2, FLOOR_PX);
     } else if (safeKind === "temple" && floor === 0) {
@@ -361,12 +363,14 @@ export function paintFacadeAtlas(ctx, kind, floors, variant) {
       if (plan.rainCover) paintRainCover(ctx, y);
       ctx.fillStyle = "#8d9394";
       ctx.fillRect(0, y + FLOOR_PX - 8, BAY_PX, 8);
-      paintSign(ctx, 10, y + 8, BAY_PX - 20, 12, "#3d4c55", plan.signDepth);
+      if (plan.paintedSign) paintSign(ctx, 10, y + 8, BAY_PX - 20, 12, "#3d4c55", plan.signDepth);
       paintShopBays(ctx, y, 2, FLOOR_PX);
     } else if (safeKind === "civic" && floor === 0) {
       if (plan.rainCover) paintRainCover(ctx, y);
-      ctx.fillStyle = "#3e5c49";
-      ctx.fillRect(8, y + 8, BAY_PX - 16, 10);
+      if (plan.paintedSign) {
+        ctx.fillStyle = "#3e5c49";
+        ctx.fillRect(8, y + 8, BAY_PX - 16, 10);
+      }
       paintWindow(ctx, 12, y + 24, 28, 36, false, safeVariant);
       ctx.fillStyle = "#3f4f46";
       ctx.fillRect(52, y + 30, 28, FLOOR_PX - 34);
@@ -414,15 +418,19 @@ export function paintFacadeAtlas(ctx, kind, floors, variant) {
   return { width, height, kind: safeKind, floors: safeFloors, variant: safeVariant, details: plan };
 }
 
-function recipeKey(kind, floors, variant) {
+function recipeKey(kind, floors, variant, options = {}) {
   const safeKind = WALLS[kind] ? kind : "shophouse";
   const safeFloors = Math.max(1, Math.min(14, Math.round(floors) || 1));
   const safeVariant = Math.abs(variant | 0) % FACADE_25D_VARIANT_COUNT;
-  return { kind: safeKind, floors: safeFloors, variant: safeVariant, key: `${safeKind}:${safeFloors}:${safeVariant}` };
+  const paintedSign = options.paintedSign !== false;
+  const key = paintedSign
+    ? `${safeKind}:${safeFloors}:${safeVariant}`
+    : `${safeKind}:${safeFloors}:${safeVariant}:nosign`;
+  return { kind: safeKind, floors: safeFloors, variant: safeVariant, paintedSign, key };
 }
 
-export function facadeAtlasCanvas(kind, floors, variant) {
-  const recipe = recipeKey(kind, floors, variant);
+export function facadeAtlasCanvas(kind, floors, variant, options = {}) {
+  const recipe = recipeKey(kind, floors, variant, options);
   const cached = canvasCache.get(recipe.key);
   if (cached) return cached;
   if (typeof document === "undefined" || !document.createElement) {
@@ -432,15 +440,15 @@ export function facadeAtlasCanvas(kind, floors, variant) {
   canvas.width = BAY_PX;
   canvas.height = FLOOR_PX * recipe.floors;
   const ctx = canvas.getContext("2d", { alpha: false });
-  paintFacadeAtlas(ctx, recipe.kind, recipe.floors, recipe.variant);
+  paintFacadeAtlas(ctx, recipe.kind, recipe.floors, recipe.variant, { paintedSign: recipe.paintedSign });
   canvasCache.set(recipe.key, canvas);
   return canvas;
 }
 
-export function facadeAtlasTexture(kind, floors, variant) {
-  const recipe = recipeKey(kind, floors, variant);
+export function facadeAtlasTexture(kind, floors, variant, options = {}) {
+  const recipe = recipeKey(kind, floors, variant, options);
   if (textureCache.has(recipe.key)) return textureCache.get(recipe.key);
-  const texture = new THREE.CanvasTexture(facadeAtlasCanvas(recipe.kind, recipe.floors, recipe.variant));
+  const texture = new THREE.CanvasTexture(facadeAtlasCanvas(recipe.kind, recipe.floors, recipe.variant, { paintedSign: recipe.paintedSign }));
   texture.name = `facade-25d-${recipe.key}`;
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
@@ -454,11 +462,11 @@ export function facadeAtlasTexture(kind, floors, variant) {
   return texture;
 }
 
-export function facadeAtlasMaterial(kind, floors, variant) {
-  const recipe = recipeKey(kind, floors, variant);
+export function facadeAtlasMaterial(kind, floors, variant, options = {}) {
+  const recipe = recipeKey(kind, floors, variant, options);
   if (materialCache.has(recipe.key)) return materialCache.get(recipe.key);
   const material = new THREE.MeshLambertMaterial({
-    map: facadeAtlasTexture(recipe.kind, recipe.floors, recipe.variant),
+    map: facadeAtlasTexture(recipe.kind, recipe.floors, recipe.variant, { paintedSign: recipe.paintedSign }),
     color: "#ffffff",
     side: THREE.DoubleSide,
   });
@@ -466,6 +474,7 @@ export function facadeAtlasMaterial(kind, floors, variant) {
   material.userData = {
     kind: "facade-atlas-25d",
     recipe: recipe.key,
+    paintedSign: recipe.paintedSign,
     estimated: true,
     procedural: true,
   };
