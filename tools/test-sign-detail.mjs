@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
-import { createProjector } from "../src/geo.js";
+import { createProjector, streetFacingEdge } from "../src/geo.js";
 import { createSigns, modeledSignShopIds } from "../src/signs.js";
-import { dressShopLot } from "../src/shop-dress.js";
+import { dressShopLot, reservedFasciaSlots } from "../src/shop-dress.js";
 import { localRing } from "../src/buildings.js";
 import { dressLandmark, dressNear50HistoricalCorner } from "../src/landmarks.js";
 import { localizeShops, matchShopsToLots } from "../src/shop-match.js";
@@ -187,6 +187,100 @@ for (const sign of near.group.children) {
   assert.ok(face.t * face.len >= halfFrame && (1 - face.t) * face.len >= halfFrame,
     `${sign.userData.name}: frame or bracket extends beyond its facade edge`);
 }
+
+const farRoads = [{ highway: "residential", pts: [{ x: 60, z: -6 }, { x: 140, z: -6 }] }];
+const farPts = [
+  { x: 70, z: 0 }, { x: 110, z: 0 }, { x: 110, z: 10 }, { x: 70, z: 10 }, { x: 70, z: 0 },
+];
+const farShops = [
+  { id: "gate", name: "北門、朝陽二里聯合活動中心", lat: 2, lon: 90, floor: 1, color: "#3a4a6b" },
+  { id: "mail", name: "桃園北門朝陽活動中心i郵箱", lat: 2.4, lon: 90.4, floor: 1, color: "#3a4a6b" },
+];
+const farSigns = createSigns(farShops, farRoads, project, 200, [{
+  id: "hall", points: farPts, shops: farShops.map((shop) => shop.name), storey: 3.1, isShop: false,
+}]);
+assert.equal(farSigns.names.includes("北門、朝陽二里聯合活動中心"), false,
+  "a fascia that already names the face must not be stacked as a second full-size board");
+assert.ok(farSigns.names.includes("桃園北門朝陽活動中心i郵箱"),
+  "a second shop on a long face should stay readable beside the fascia");
+const farEdge = streetFacingEdge(farPts, farRoads);
+const farSlots = reservedFasciaSlots(farEdge, 3.1, {
+  groundShop: { name: "北門、朝陽二里聯合活動中心", brand: "shop" },
+});
+const mailSign = farSigns.group.children.find((mesh) => mesh.userData.name === "桃園北門朝陽活動中心i郵箱");
+assert.ok(mailSign?.userData.faceEdge, "spaced sign should record the face it was fitted to");
+for (const slot of farSlots) {
+  const tx = (farEdge.b.x - farEdge.a.x) / farEdge.len;
+  const tz = (farEdge.b.z - farEdge.a.z) / farEdge.len;
+  const wallX = farEdge.a.x + (farEdge.b.x - farEdge.a.x) * slot.t;
+  const wallZ = farEdge.a.z + (farEdge.b.z - farEdge.a.z) * slot.t;
+  const along = (mailSign.position.x - wallX) * tx + (mailSign.position.z - wallZ) * tz;
+  const out = (mailSign.position.x - wallX) * farEdge.nx + (mailSign.position.z - wallZ) * farEdge.nz;
+  const alongGap = Math.abs(along) - (mailSign.userData.width + slot.width) / 2;
+  const yGap = Math.abs(mailSign.userData.y - slot.y) - (0.72 + slot.height) / 2;
+  if (Math.abs(out) > 1.7) continue;
+  assert.ok(alongGap >= 0.15 || yGap >= 0.05,
+    `i郵箱 overlaps ${slot.name} along ${alongGap} y ${yGap}`);
+}
+const dressedFar = new THREE.Group();
+dressShopLot(dressedFar, farPts, farRoads, 3.1, {
+  groundShop: { name: "北門、朝陽二里聯合活動中心", brand: "shop" },
+  upperShop: null,
+  isShop: false,
+});
+const dressedBoard = dressedFar.children.find((mesh) => mesh.userData?.kind === "fascia");
+const dressedValance = dressedFar.children.filter((mesh) =>
+  mesh.userData?.kind === "awning" || mesh.userData?.kind === "awning-lip");
+assert.ok(dressedBoard && dressedValance.length >= 2, "generic shop still needs a fascia and a valance");
+for (const piece of dressedValance) {
+  const yaw = dressedBoard.rotation.y;
+  const dx = piece.position.x - dressedBoard.position.x;
+  const dz = piece.position.z - dressedBoard.position.z;
+  const outGap = Math.abs(dx * Math.sin(yaw) + dz * Math.cos(yaw))
+    - (dressedBoard.geometry.parameters.depth + piece.geometry.parameters.depth) / 2;
+  const yGap = Math.abs(piece.position.y - dressedBoard.position.y)
+    - (dressedBoard.geometry.parameters.height + piece.geometry.parameters.height) / 2;
+  const along = dx * Math.cos(yaw) + dz * -Math.sin(yaw);
+  const alongGap = Math.abs(along)
+    - (dressedBoard.geometry.parameters.width + piece.geometry.parameters.width) / 2;
+  assert.ok(outGap >= -0.001 || yGap >= -0.001 || alongGap >= -0.001,
+    `valance ${piece.userData.kind} pierces the fascia`);
+}
+
+const wide = createSigns(actualShops, actualRoads, actualProject, 200, actualColliders);
+const wideBoards = wide.group.children.map((sign) => {
+  const yaw = sign.rotation.y;
+  return {
+    name: sign.userData.name,
+    id: sign.userData.colliderId,
+    x: sign.position.x,
+    z: sign.position.z,
+    y: sign.userData.y,
+    w: sign.userData.width,
+    h: 0.72,
+    tx: Math.cos(yaw),
+    tz: -Math.sin(yaw),
+    nx: Math.sin(yaw),
+    nz: Math.cos(yaw),
+  };
+});
+for (let i = 0; i < wideBoards.length; i += 1) {
+  for (let j = i + 1; j < wideBoards.length; j += 1) {
+    const a = wideBoards[i];
+    const b = wideBoards[j];
+    if (!a.id || a.id !== b.id) continue;
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const alongGap = Math.abs(dx * a.tx + dz * a.tz) - (a.w + b.w) / 2;
+    const out = Math.abs(dx * a.nx + dz * a.nz);
+    const yGap = Math.abs(a.y - b.y) - (a.h + b.h) / 2;
+    assert.ok(out > 0.35 || alongGap >= 0.05 || yGap >= 0.05,
+      `${a.name} overlaps ${b.name} on ${a.id}`);
+  }
+}
+assert.equal(wide.names.includes("北門、朝陽二里聯合活動中心"), false);
+assert.ok(wide.names.includes("桃園北門朝陽活動中心i郵箱"));
+assert.deepEqual(wide.pending.map((shop) => shop.name).sort(), ["斗南米糕甲", "無名米粉湯"].sort());
 
 console.log("sign detail ok", {
   synthetic: created.names,

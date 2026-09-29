@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { nearestRoad, pointInRing, streetFacingEdge } from "./geo.js";
 import { makeVerticalSignTexture, makeShopSignTexture } from "./textures.js";
 import { brandMeta } from "./brands.js";
-import { dressOwnsShopSign, facingNeighborLots } from "./shop-dress.js";
+import { dressOwnsShopSign, facingNeighborLots, reservedFasciaSlots } from "./shop-dress.js";
 import { facadeOwnsListedSign, landmarkFor } from "./landmarks.js";
 import { localizeShops, matchShopsToLots, splitShopFloors } from "./shop-match.js";
 import { ZHENFU_HALL_ID, ZHENFU_PLAQUE } from "./temple.js";
@@ -43,6 +43,113 @@ export function modeledSignShopIds(shops, roads, project, colliders, radius = NE
   return visible;
 }
 
+function verticalOverlap(y, h, oy, oh, pad = 0.04) {
+  return Math.abs(y - oy) < (h + oh) / 2 + pad;
+}
+
+function slideAlong(len, desiredT, width, blocked) {
+  const half = width / 2;
+  const margin = half + Math.min(0.08, len * 0.02);
+  if (!(len > margin * 2)) return null;
+  const minC = margin;
+  const maxC = len - margin;
+  const gap = 0.32;
+  const zones = blocked.map((slot) => {
+    const center = slot.t * (slot.len || len);
+    return [center - slot.width / 2 - gap, center + slot.width / 2 + gap];
+  });
+  const clear = (center) => center >= minC - 1e-6 && center <= maxC + 1e-6
+    && zones.every(([a, b]) => center + half <= a + 1e-6 || center - half >= b - 1e-6);
+  const desired = Math.max(minC, Math.min(maxC, desiredT * len));
+  if (clear(desired)) return desired / len;
+  const step = Math.min(0.2, Math.max(0.08, width / 4));
+  for (let dist = step; dist <= len + step; dist += step) {
+    for (const center of [desired - dist, desired + dist]) {
+      if (clear(center)) return center / len;
+    }
+  }
+  return null;
+}
+
+function edgeFrame(pts, index) {
+  const closed = pts.length > 1 && pts[0].x === pts.at(-1).x && pts[0].z === pts.at(-1).z;
+  const count = closed ? pts.length - 1 : pts.length;
+  const a = pts[index];
+  const b = pts[(index + 1) % count];
+  if (!a || !b) return null;
+  const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+  let nx = (a.z - b.z) / len;
+  let nz = (b.x - a.x) / len;
+  if (pointInRing((a.x + b.x) * 0.5 + nx * 0.25, (a.z + b.z) * 0.5 + nz * 0.25, pts)) {
+    nx = -nx;
+    nz = -nz;
+  }
+  return {
+    len,
+    tx: (b.x - a.x) / len,
+    tz: (b.z - a.z) / len,
+    nx,
+    nz,
+    point(t) {
+      return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+    },
+  };
+}
+
+function frameSlot(colliderId, pts, slot) {
+  const frame = edgeFrame(pts, slot.edgeIndex);
+  if (!frame) return null;
+  const at = frame.point(slot.t);
+  return {
+    ...slot,
+    colliderId,
+    len: frame.len,
+    cx: at.x,
+    cz: at.z,
+    tx: frame.tx,
+    tz: frame.tz,
+    nx: frame.nx,
+    nz: frame.nz,
+  };
+}
+
+function collectFasciaSlots(shops, roads, project, colliders) {
+  const lots = (colliders || [])
+    .filter((c) => c?.id && c.points?.length >= 3)
+    .map((c) => ({ id: c.id, pts: c.points, isShop: Boolean(c.isShop), collider: c }));
+  if (!lots.length) return [];
+  const matched = matchShopsToLots(localizeShops(shops, project), lots);
+  const shopLot = lots.find((lot) => lot.isShop);
+  const neighbors = shopLot ? facingNeighborLots(shopLot.pts, lots, roads) : null;
+  const neighborIds = new Set([neighbors?.left?.id, neighbors?.right?.id]);
+  const slots = [];
+  for (const lot of lots) {
+    if (lot.isShop || neighborIds.has(lot.id) || landmarkFor(lot.id)?.ownsSign) continue;
+    const attached = matched.byLot.get(lot.id) || [];
+    if (!attached.length) continue;
+    const edge = streetFacingEdge(lot.pts, roads);
+    const floors = splitShopFloors(attached);
+    for (const slot of reservedFasciaSlots(edge, lot.collider.storey, {
+      groundShop: floors.ground, upperShop: floors.upper, isShop: false,
+    })) {
+      const framed = frameSlot(lot.id, lot.pts, slot);
+      if (framed) slots.push(framed);
+    }
+  }
+  return slots;
+}
+
+function overlapsReserved(sign, slot) {
+  if (!sign?.collider || sign.collider.id !== slot.colliderId) return false;
+  if (!verticalOverlap(sign.y, sign.h, slot.y, slot.height)) return false;
+  const dx = sign.x - slot.cx;
+  const dz = sign.z - slot.cz;
+  const along = dx * slot.tx + dz * slot.tz;
+  const out = dx * slot.nx + dz * slot.nz;
+  if (Math.abs(out) > 1.7) return false;
+  return Math.abs(along) < (sign.w + slot.width) / 2 + 0.2;
+}
+
 function fittedEdge(pts, roads, x, z, width) {
   let best = null;
   const closed = pts[0].x === pts.at(-1).x && pts[0].z === pts.at(-1).z;
@@ -75,7 +182,7 @@ function fittedEdge(pts, roads, x, z, width) {
   return best;
 }
 
-function snapToFacade(x, z, colliders, roads, requiredWidth = 0, shopName = "", occupiedNames = new Set()) {
+function snapToFacade(x, z, colliders, roads, requiredWidth = 0, shopName = "", occupiedNames = new Set(), options = {}) {
   let best = null;
   for (const c of colliders || []) {
     const pts = c.points;
@@ -110,16 +217,33 @@ function snapToFacade(x, z, colliders, roads, requiredWidth = 0, shopName = "", 
       // Two businesses sharing one unsplit footprint have no surveyed frontage
       // assignment. A guessed side-wall sign can cover the known front sign or
       // send both signs to the same side wall. Keep the second POI as pending.
-      if (frontOccupied) return { pendingReason: "shared-frontage-needs-calibration", collider: best.collider };
+      if (frontOccupied && options.near) return { pendingReason: "shared-frontage-needs-calibration", collider: best.collider };
       const fit = fittedEdge(best.collider.points, roads, x, z, requiredWidth);
       if (fit) {
+        let t = fit.t;
+        let px = fit.px;
+        let pz = fit.pz;
+        const width = Math.min(requiredWidth, fit.fitWidth);
+        if (!options.near) {
+          const blocked = (options.blocked || []).filter((slot) =>
+            slot.colliderId === best.collider.id
+            && slot.edgeIndex === fit.index
+            && verticalOverlap(options.boardY ?? 2.58, options.boardH ?? 0.72, slot.y, slot.height));
+          const slid = slideAlong(fit.len, fit.t, width, blocked);
+          if (slid == null) return { pendingReason: "shared-frontage-needs-calibration", collider: best.collider };
+          t = slid;
+          const frame = edgeFrame(best.collider.points, fit.index);
+          const at = frame.point(t);
+          px = at.x;
+          pz = at.z;
+        }
         return {
-          x: fit.px + fit.nx * 0.86,
-          z: fit.pz + fit.nz * 0.86,
+          x: px + fit.nx * 0.86,
+          z: pz + fit.nz * 0.86,
           yaw: Math.atan2(fit.nx, fit.nz),
           collider: best.collider,
-          faceEdge: { index: fit.index, len: fit.len, t: fit.t },
-          fitWidth: fit.fitWidth,
+          faceEdge: { index: fit.index, len: fit.len, t },
+          fitWidth: width,
         };
       }
     }
@@ -161,6 +285,7 @@ export function createSigns(shops, roads, project, radius, colliders) {
   const r2 = radius * radius;
   const nearR2 = NEAR_SIGN_DETAIL_RADIUS ** 2;
   const modeledSigns = modeledSignShopIds(shops, roads, project, colliders);
+  const blocked = collectFasciaSlots(shops, roads, project, colliders);
   const occupiedNames = new Set((shops || [])
     .filter((shop) => modeledSigns.has(shop.id) || dressOwnsShopSign(shop) || facadeOwnsListedSign(shop))
     .map((shop) => shop.name));
@@ -209,12 +334,34 @@ export function createSigns(shops, roads, project, radius, colliders) {
         };
       }
     }
-    if (!snapped) snapped = snapToFacade(p.x, p.z, colliders, roads, near ? w : 0, shop.name, occupiedNames);
+    if (!snapped) snapped = snapToFacade(p.x, p.z, colliders, roads, near ? w : 0, shop.name, occupiedNames, { near });
+    let boardY = signHeightFor(shop, snapped.pendingReason ? null : snapped);
+    const boardH = h;
+    if (!snapped.pendingReason && !near && snapped.collider) {
+      const probe = (pose, width) => ({
+        collider: pose.collider, x: pose.x, z: pose.z, y: boardY, h: boardH, w: width,
+      });
+      const hit = blocked.filter((slot) => overlapsReserved(probe(snapped, w), slot));
+      const sameName = hit.some((slot) => slot.name && slot.name === shop.name);
+      if (sameName) {
+        // The building fascia already carries this name on the same face.
+        continue;
+      }
+      if (hit.length) {
+        const refit = snapToFacade(p.x, p.z, colliders, roads, w, shop.name, occupiedNames, {
+          near: false, blocked, boardY, boardH,
+        });
+        boardY = signHeightFor(shop, refit.pendingReason ? snapped : refit);
+        if (refit.pendingReason) snapped = refit;
+        else if (!blocked.some((slot) => overlapsReserved(probe(refit, refit.fitWidth || w), slot))) snapped = refit;
+        else snapped = { pendingReason: "shared-frontage-needs-calibration", collider: snapped.collider };
+      }
+    }
     if (snapped.pendingReason) {
       pending.push({ name: shop.name, reason: snapped.pendingReason, colliderId: snapped.collider?.id || null });
       continue;
     }
-    if (near && snapped.fitWidth) w = Math.min(w, snapped.fitWidth);
+    if (snapped.fitWidth) w = Math.min(w, snapped.fitWidth);
 
     const g = new THREE.Group();
     g.position.set(snapped.x, 0, snapped.z);
@@ -259,6 +406,27 @@ export function createSigns(shops, roads, project, radius, colliders) {
       evidence: "estimated", faceEdge: snapped.faceEdge || null, width: w,
       colliderId: snapped.collider?.id || null,
     };
+    if (snapped.collider) {
+      const nx = Math.sin(snapped.yaw);
+      const nz = Math.cos(snapped.yaw);
+      const face = snapped.faceEdge;
+      blocked.push({
+        colliderId: snapped.collider.id,
+        edgeIndex: face?.index ?? -1,
+        len: face?.len,
+        t: face?.t ?? 0.5,
+        width: w,
+        y,
+        height: h,
+        name: shop.name,
+        cx: snapped.x - nx * 0.86,
+        cz: snapped.z - nz * 0.86,
+        tx: Math.cos(snapped.yaw),
+        tz: -Math.sin(snapped.yaw),
+        nx,
+        nz,
+      });
+    }
     group.add(g);
     count += 1;
     names.push(shop.name);
