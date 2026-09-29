@@ -13,6 +13,7 @@ import { planWallPanels, WINDOW_CUTOUT_WIDTH, WINDOW_CUTOUT_HEIGHT } from "./wal
 import { claddingNormalAsset, createCladdingMaterial } from "./cladding-material.js";
 import { createDrainpipeDetail, drainpipeCenterClear } from "./drainpipe-detail.js";
 import { createZhenfuAnnex, createZhenfuHall, isZhenfuAnnex, isZhenfuHall } from "./temple.js";
+import { civicSpecFor, createCivicHall, createWorshipHall, worshipSpecFor } from "./worship.js";
 import { applyFacadeMode, facadeAtlasMaterial, normalizeFacadeMode, resolveFacade25d } from "./facade-atlas-25d.js";
 import {
   makeStorefrontTexture,
@@ -578,6 +579,53 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
     const upperShop = floors.upper;
     const neighbor = neighborById.get(b.id) || null;
     const landmark = !isShop && !neighbor ? landmarkFor(b.id) : null;
+    if (!isShop && !neighbor && !landmark) {
+      const worship = worshipSpecFor(b);
+      if (worship) {
+        const built = createWorshipHall(pts, roads, worship);
+        if (built) {
+          group.add(built.group);
+          colliders.push({
+            ...built.collider,
+            observedFloors: null,
+            heightIsEstimated: true,
+            modelRole: "temple",
+            plaque: worship.name,
+            shops: [worship.name],
+            normalMapped: false,
+            detailedDrainpipe: false,
+            recessedWindows: 0,
+            projectionOmissions: 0,
+          });
+          if (worship.name === "朝陽宮") landmarkViews.chaoyang = built.view;
+          else if (worship.name === "大雄寶殿") landmarkViews.daxiong = built.view;
+          else if (worship.name === "桃園佛教蓮社") landmarkViews.lianshe = built.view;
+          continue;
+        }
+      }
+      const civic = civicSpecFor(b);
+      if (civic) {
+        const built = createCivicHall(pts, roads, civic);
+        if (built) {
+          group.add(built.group);
+          colliders.push({
+            ...built.collider,
+            observedFloors: null,
+            heightIsEstimated: true,
+            modelRole: "civic",
+            plaque: civic.name,
+            shops: [civic.name],
+            normalMapped: false,
+            detailedDrainpipe: false,
+            recessedWindows: 0,
+            projectionOmissions: 0,
+          });
+          if (/活動中心/.test(civic.name)) landmarkViews.activity = built.view;
+          else if (/集會所/.test(civic.name)) landmarkViews.assembly = built.view;
+          continue;
+        }
+      }
+    }
     const normalMapped = lot.nearDetail && !isShop && !neighbor && !landmark;
     if (normalMapped) facadeStats.near50NormalMappedBuildings += 1;
     const hasMetalCap = !isShop && !neighbor && !landmark && !isChainStore(groundShop?.brand) && facade.metalCap;

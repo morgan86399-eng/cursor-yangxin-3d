@@ -124,9 +124,11 @@ async function main() {
   assert.ok(ready.near50PlainUpper >= 1, "near-field street walls should not have duplicate painted and physical windows");
   assert.ok(ready.near50PhysicalWindows >= 1, "near-field physical windows missing");
   assert.equal(ready.near50Inventory.length, 31, "the 50m visitor inspector must include all footprints");
-  assert.equal(ready.near50Inventory.filter((item) => item.modelRole === "generic").length, 19,
+  assert.equal(ready.near50Inventory.filter((item) => item.modelRole === "generic").length, 18,
     "the 50m inspector must disclose the generic-model backlog rather than call every volume detailed");
-  assert.equal(ready.near50Inventory.filter((item) => item.modelRole !== "generic").length, 12);
+  assert.equal(ready.near50Inventory.filter((item) => item.modelRole !== "generic").length, 13);
+  assert.equal(ready.near50Inventory.find((item) => item.id === "way/764063118")?.modelRole, "civic",
+    "青溪、成功、東門里集會所 is a community centre, not a generic house");
   assert.ok(ready.near50RecessedWindows > 0 && ready.near50RecessedBuildings > 0);
   assert.equal(ready.near50RecessedWindows, ready.near50Inventory.reduce((sum, item) => sum + item.recessedWindows, 0),
     "every updated window must belong to a building in the 50m inventory");
@@ -175,7 +177,7 @@ async function main() {
   assert.equal(near50Ui.allFocusable, true);
   assert.equal(near50Ui.selected, 1);
   assert.equal(near50Ui.visualCautions, 3, "the three historically ambiguous lots need visible cautions");
-  assert.match(near50Ui.summary, /19 筆仍用通用推估外觀/);
+  assert.match(near50Ui.summary, /18 筆仍用通用推估外觀/);
   assert.match(near50Ui.summary, /31 筆輪廓.*0 筆現況立面校準/);
   await page.screenshot({ path: path.join(OUT, "e2e_near50_inspector.png"), type: "png" });
   await page.click("#near50Close");
