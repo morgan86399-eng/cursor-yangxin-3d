@@ -243,7 +243,7 @@ async function boot() {
   }
   near50Btn.addEventListener("click", () => setNear50Panel(near50Panel.hidden));
   near50Close.addEventListener("click", () => setNear50Panel(false));
-  const farm = createCourtyardFarm(scene, world.zhenfu, controls);
+  const farm = createCourtyardFarm(scene, world.zhenfu, controls, { camera });
 
   document.querySelectorAll("[data-move]").forEach((button) => {
     const key = button.dataset.move;
@@ -325,6 +325,22 @@ async function boot() {
       controls.orbit.minDistance = 1.2;
       controls.orbit.update();
     }
+  } else if (view === "farm" && world.zhenfu) {
+    const t = world.zhenfu;
+    const depth = Math.min((t.courtDepth || 12) - 3.4, 9.4);
+    const lookX = t.midX + t.outX * depth + t.rightX * 0.4;
+    const lookZ = t.midZ + t.outZ * depth + t.rightZ * 0.4;
+    controls.setMode("orbit");
+    camera.fov = 42;
+    camera.updateProjectionMatrix();
+    camera.position.set(
+      lookX + t.outX * 4.6 + t.rightX * 1.7,
+      2.15,
+      lookZ + t.outZ * 4.6 + t.rightZ * 1.7,
+    );
+    controls.orbit.target.set(lookX, 0.72, lookZ);
+    controls.orbit.minDistance = 1.2;
+    controls.orbit.update();
   } else if ((view === "zhenfu" || view === "zhenfu3q") && world.zhenfu) {
     const cam = view === "zhenfu3q" ? world.zhenfu.threeQuarter : world.zhenfu.front;
     camera.position.set(cam.x, cam.y, cam.z);
@@ -393,8 +409,8 @@ async function boot() {
 
   const facadeNotes = {
     realistic: "寫實立面：沿用現有近景與通用貼圖，未套用 2.5D 招牌樓。",
-    mixed: "混合：50 公尺內維持現有立面，較遠街面為程序化 2.5D 招牌樓（示意窗格與招牌帶，不是實景）。",
-    stylized: "2.5D 招牌樓：街面改程序化窗格與招牌帶（示意，不是實景）。店面、鄰房、廟宇與地標仍用原模型。",
+    mixed: "混合：50 公尺內維持現有立面，較遠街面為程序化 2.5D 招牌樓（窗框、雨遮、招牌厚度與店面分區，不是實景）。",
+    stylized: "2.5D 招牌樓：街面改程序化窗框、雨遮與招牌帶（示意，不是實景）。店面、鄰房、廟宇與地標仍用原模型。",
   };
   function setFacadeMode(mode) {
     const applied = applyFacadeMode(world.group, mode);
