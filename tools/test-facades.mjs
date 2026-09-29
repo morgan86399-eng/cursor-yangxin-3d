@@ -4,7 +4,21 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { classifyFacade, classifyRoof, hash01, FACADE_STYLES, HOUSE_PALETTE, makeNeighborShellTexture, makeStorefrontTexture } from "../src/textures.js";
 import { displayHeightForLot } from "../src/lots.js";
-import { decorativeCapHeight, resolveBuildingProfile } from "../src/buildings.js";
+import { decorativeCapHeight, makeWallGeometry, resolveBuildingProfile } from "../src/buildings.js";
+import {
+  BAY_PX,
+  FLOOR_PX,
+  applyFacadeMode,
+  bayWidthForKind,
+  classifyFacade25d,
+  clearFacadeAtlasCache,
+  facadeAtlasMaterial,
+  facadeLayerVisible,
+  measureFacade25d,
+  paintFacadeAtlas,
+  resolveFacade25d,
+} from "../src/facade-atlas-25d.js";
+import * as THREE from "three";
 
 for (const height of [6.35, 6.6, 9.4, 12.55]) {
   const cap = decorativeCapHeight(height, true);
@@ -123,6 +137,136 @@ assert.ok(arcade > 5, `arcades ${arcade}`);
 
 const house = resolveBuildingProfile({ id: "way/1", name: "", building: "apartments", height: 6 });
 assert.equal(house.height, 6);
+
+assert.equal(classifyFacade25d({ building: "temple" }, 1), "temple");
+assert.equal(classifyFacade25d({ building: "government", levels: 3 }, 1), "civic");
+assert.equal(classifyFacade25d({ building: "apartments", levels: 8 }, 1), "mid");
+assert.equal(classifyFacade25d({ building: "apartments", levels: 5 }, 1), "apt");
+assert.equal(classifyFacade25d({ building: "house", levels: 2 }, 1), "shophouse");
+assert.equal(measureFacade25d({}, "shophouse", 0).floors, 3);
+assert.equal(measureFacade25d({ levels: 4 }, "apt", 0).source, "levels");
+assert.equal(bayWidthForKind("apt"), 3.6);
+assert.equal(bayWidthForKind("mid"), 4.6);
+assert.equal(bayWidthForKind("shophouse"), 4.1);
+const modeled = resolveFacade25d(
+  { id: "nlsc/25d", building: "house", levels: 2, height: 6.6 },
+  { height: 6.3, kindHint: "house" }
+);
+assert.equal(modeled.floors, 2);
+assert.equal(modeled.source, "modeled");
+assert.ok(modeled.kind === "shophouse" || modeled.kind === "apt");
+assert.equal(resolveFacade25d({ id: "nlsc/25d", building: "house", levels: 2 }, { height: 6.3 }).key, modeled.key);
+assert.equal(facadeLayerVisible("atlas25d", true, "mixed"), false);
+assert.equal(facadeLayerVisible("atlas25d", false, "mixed"), true);
+assert.equal(facadeLayerVisible("atlas25d", true, "stylized"), true);
+assert.equal(facadeLayerVisible("atlas25d", false, "realistic"), false);
+assert.equal(facadeLayerVisible("realistic-street", false, "mixed"), false);
+assert.equal(facadeLayerVisible("realistic-street", true, "mixed"), true);
+assert.equal(facadeLayerVisible("realistic-street", false, "realistic"), true);
+assert.equal(facadeLayerVisible("realistic-street", true, "stylized"), false);
+assert.equal(facadeLayerVisible("atlas25d", false, "25d"), true);
+
+const bayRing = [
+  { x: 0, z: 0 }, { x: 8.2, z: 0 }, { x: 8.2, z: 3 }, { x: 0, z: 3 }, { x: 0, z: 0 },
+];
+const bayWall = makeWallGeometry(bayRing, 0.01, 6.3, bayWidthForKind("shophouse"), 1, (i) => i === 0);
+const bayUv = bayWall.getAttribute("uv");
+let maxU = 0;
+let maxV = 0;
+for (let i = 0; i < bayUv.count; i += 1) {
+  maxU = Math.max(maxU, bayUv.getX(i));
+  maxV = Math.max(maxV, bayUv.getY(i));
+}
+assert.ok(Math.abs(maxU - 2) < 1e-5, `one 4.1m bay should be one texture repeat, got ${maxU}`);
+assert.ok(Math.abs(maxV - 1) < 1e-5, `full-height atlas should cover the wall once, got ${maxV}`);
+
+const modeRoot = new THREE.Group();
+const farAtlas = new THREE.Mesh();
+farAtlas.userData = { facadeLayer: "atlas25d", nearDetail: false };
+const nearAtlas = new THREE.Mesh();
+nearAtlas.userData = { facadeLayer: "atlas25d", nearDetail: true };
+const farShell = new THREE.Mesh();
+farShell.userData = { facadeLayer: "realistic-street", nearDetail: false };
+const nearShell = new THREE.Mesh();
+nearShell.userData = { facadeLayer: "realistic-street", nearDetail: true };
+const shopShell = new THREE.Mesh();
+modeRoot.add(farAtlas, nearAtlas, farShell, nearShell, shopShell);
+assert.equal(applyFacadeMode(modeRoot, "mixed"), "mixed");
+assert.equal(farAtlas.visible, true);
+assert.equal(nearAtlas.visible, false);
+assert.equal(farShell.visible, false);
+assert.equal(nearShell.visible, true);
+assert.equal(shopShell.visible, true);
+applyFacadeMode(modeRoot, "realistic");
+assert.equal(farAtlas.visible, false);
+assert.equal(nearShell.visible, true);
+assert.equal(farShell.visible, true);
+applyFacadeMode(modeRoot, "25d");
+assert.equal(farAtlas.visible, true);
+assert.equal(nearAtlas.visible, true);
+assert.equal(farShell.visible, false);
+assert.equal(nearShell.visible, false);
+
+clearFacadeAtlasCache();
+const originalFacadeDocument = globalThis.document;
+const facadeCanvases = [];
+globalThis.document = {
+  createElement(tag) {
+    assert.equal(tag, "canvas");
+    const fills = [];
+    let strokes = 0;
+    const ctx = {
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      fillRect(x, y, width, height) { fills.push({ x, y, width, height, color: this.fillStyle }); },
+      beginPath() {},
+      moveTo() {},
+      lineTo() {},
+      stroke() { strokes += 1; },
+    };
+    const canvas = { width: 0, height: 0, getContext: () => ctx, fills, get strokes() { return strokes; } };
+    facadeCanvases.push(canvas);
+    return canvas;
+  },
+};
+try {
+  const recorded = { fills: [] };
+  const recorder = {
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
+    fillRect(x, y, width, height) { recorded.fills.push({ x, y, width, height, color: this.fillStyle }); },
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+  };
+  const painted = paintFacadeAtlas(recorder, "shophouse", 3, 0);
+  assert.equal(painted.width, BAY_PX);
+  assert.equal(painted.height, FLOOR_PX * 3);
+  assert.equal(recorded.fills[0].color, "#efe2cf");
+  assert.ok(recorded.fills.some((fill) => fill.color === "#c44536"), "shophouse ground floor keeps a sign band");
+  assert.ok(recorded.fills.some((fill) => fill.color === "#7ea0b3" || fill.color === "#f0d7a4"),
+    "upper floors keep a window grid");
+  const first = facadeAtlasMaterial("shophouse", 3, 0);
+  const again = facadeAtlasMaterial("shophouse", 3, 0);
+  const other = facadeAtlasMaterial("apt", 5, 1);
+  assert.equal(again, first, "the same recipe must reuse one material");
+  assert.notEqual(other, first);
+  assert.equal(first.userData.kind, "facade-atlas-25d");
+  assert.equal(first.userData.estimated, true);
+  assert.equal(first.userData.procedural, true);
+  assert.equal(first.map.wrapS, THREE.RepeatWrapping);
+  assert.equal(first.map.wrapT, THREE.ClampToEdgeWrapping);
+  assert.equal(first.map.image.width, BAY_PX);
+  assert.equal(first.map.image.height, FLOOR_PX * 3);
+  assert.equal(facadeCanvases.length, 2, "apt and shophouse are separate atlases");
+} finally {
+  clearFacadeAtlasCache();
+  if (originalFacadeDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalFacadeDocument;
+}
 
 console.log("facades ok", {
   comboSample: combos.size,

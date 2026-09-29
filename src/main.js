@@ -12,6 +12,7 @@ import { hitsCollider } from "./player.js";
 import { makePavementDetail } from "./textures.js";
 import { createCourtyardFarm } from "./farm.js";
 import { createNear50Inventory, near50CameraPose } from "./near50-inventory.js";
+import { applyFacadeMode, normalizeFacadeMode } from "./facade-atlas-25d.js";
 
 const statusEl = document.getElementById("status");
 const addressEl = document.getElementById("address");
@@ -26,12 +27,17 @@ const near50List = document.getElementById("near50List");
 const near50Summary = document.getElementById("near50Summary");
 const walkBtn = document.getElementById("walkBtn");
 const lockBtn = document.getElementById("lockBtn");
+const facadeRealisticBtn = document.getElementById("facadeRealisticBtn");
+const facadeMixedBtn = document.getElementById("facadeMixedBtn");
+const facade25dBtn = document.getElementById("facade25dBtn");
+const facadeNote = document.getElementById("facadeNote");
 const hintEl = document.getElementById("hint");
 const crosshairEl = document.getElementById("crosshair");
 const lockHintEl = document.getElementById("lockHint");
 const initialParams = new URLSearchParams(window.location.search);
 const initialView = initialParams.get("view");
 const initialBuildingId = initialParams.get("building");
+const initialFacadeMode = normalizeFacadeMode(initialParams.get("facade"));
 
 function setStatus(text) {
   if (statusEl) statusEl.textContent = text;
@@ -123,7 +129,9 @@ async function boot() {
   const roofMat = createRoofMaterial(aerialTex);
   scene.add(createGround(frame, aerialMat, config).group);
   scene.add(network.group);
-  const world = createDetailedBuildings(osm, config, project, edits, roofMat, frame, network.roads, lotData, aerialTex, shops);
+  const world = createDetailedBuildings(osm, config, project, edits, roofMat, frame, network.roads, lotData, aerialTex, shops, {
+    facadeMode: initialFacadeMode,
+  });
   scene.add(world.group);
   const near50Inventory = createNear50Inventory(lotData.buildings || osm.buildings, world.colliders, project);
   if (initialView === "near50") {
@@ -273,6 +281,50 @@ async function boot() {
     controls.orbit.update();
   } else if (view === "walk") {
     controls.setMode("walk");
+  } else if (view === "facade") {
+    let best = null;
+    world.group.traverse((obj) => {
+      if (obj.name !== "facade-atlas-25d" || obj.userData?.nearDetail) return;
+      const pos = obj.geometry?.getAttribute("position");
+      if (!pos || pos.count < 3) return;
+      const ax = pos.getX(0);
+      const ay = pos.getY(0);
+      const az = pos.getZ(0);
+      const bx = pos.getX(1);
+      const by = pos.getY(1);
+      const bz = pos.getZ(1);
+      const cx = pos.getX(2);
+      const cy = pos.getY(2);
+      const cz = pos.getZ(2);
+      const ux = bx - ax;
+      const uy = by - ay;
+      const uz = bz - az;
+      const vx = cx - ax;
+      const vy = cy - ay;
+      const vz = cz - az;
+      let nx = uy * vz - uz * vy;
+      const ny = uz * vx - ux * vz;
+      let nz = ux * vy - uy * vx;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      nx /= len;
+      nz /= len;
+      if (Math.abs(ny / len) > 0.35) return;
+      const mx = (ax + bx) / 2;
+      const mz = (az + bz) / 2;
+      const dist = Math.hypot(mx, mz);
+      const width = Math.hypot(ux, uz);
+      if (dist < 70 || dist > 130 || width < 8) return;
+      const score = width - Math.abs(dist - 95);
+      if (!best || score > best.score) best = { score, mx, mz, nx, nz, y: Math.max(4.2, Math.min(Math.max(ay, cy) * 0.45, 8)) };
+    });
+    if (best) {
+      camera.fov = 50;
+      camera.updateProjectionMatrix();
+      camera.position.set(best.mx + best.nx * 18, best.y, best.mz + best.nz * 18);
+      controls.orbit.target.set(best.mx, best.y * 0.55, best.mz);
+      controls.orbit.minDistance = 1.2;
+      controls.orbit.update();
+    }
   } else if ((view === "zhenfu" || view === "zhenfu3q") && world.zhenfu) {
     const cam = view === "zhenfu3q" ? world.zhenfu.threeQuarter : world.zhenfu.front;
     camera.position.set(cam.x, cam.y, cam.z);
@@ -339,6 +391,33 @@ async function boot() {
   });
   lockBtn.addEventListener("click", () => controls.setLookLocked(!controls.getState().locked));
 
+  const facadeNotes = {
+    realistic: "寫實立面：沿用現有近景與通用貼圖，未套用 2.5D 招牌樓。",
+    mixed: "混合：50 公尺內維持現有立面，較遠街面為程序化 2.5D 招牌樓（示意窗格與招牌帶，不是實景）。",
+    stylized: "2.5D 招牌樓：街面改程序化窗格與招牌帶（示意，不是實景）。店面、鄰房、廟宇與地標仍用原模型。",
+  };
+  function setFacadeMode(mode) {
+    const applied = applyFacadeMode(world.group, mode);
+    if (world.facadeStats) world.facadeStats.facadeMode = applied;
+    for (const [button, value] of [
+      [facadeRealisticBtn, "realistic"],
+      [facadeMixedBtn, "mixed"],
+      [facade25dBtn, "stylized"],
+    ]) {
+      if (!button) continue;
+      const on = applied === value;
+      button.classList.toggle("is-on", on);
+      button.setAttribute("aria-pressed", String(on));
+    }
+    if (facadeNote) facadeNote.textContent = facadeNotes[applied];
+    if (window.__yangxin) window.__yangxin.facadeMode = applied;
+    return applied;
+  }
+  setFacadeMode(world.facadeStats?.facadeMode || initialFacadeMode);
+  facadeRealisticBtn?.addEventListener("click", () => setFacadeMode("realistic"));
+  facadeMixedBtn?.addEventListener("click", () => setFacadeMode("mixed"));
+  facade25dBtn?.addEventListener("click", () => setFacadeMode("stylized"));
+
   window.__yangxin = {
     enterWalk(opts) {
       controls.setMode("walk");
@@ -355,6 +434,34 @@ async function boot() {
     insideBuilding: (x, z) => world.colliders.some((c) => hitsCollider(x, z, 0.2, c)),
     shopCollider: world.colliders.find((c) => c.isShop) || null,
     facadeStats: world.facadeStats || null,
+    facadeMode: world.facadeStats?.facadeMode || "mixed",
+    setFacadeMode,
+    getFacade25dAudit() {
+      const audit = {
+        atlasVisible: 0,
+        atlasHidden: 0,
+        nearAtlasVisible: 0,
+        farAtlasVisible: 0,
+        shopAtlas: 0,
+        realisticStreetVisible: 0,
+        realisticStreetHidden: 0,
+      };
+      world.group.traverse((obj) => {
+        const layer = obj.userData?.facadeLayer;
+        if (layer === "atlas25d") {
+          if (obj.userData.isShop) audit.shopAtlas += 1;
+          if (obj.visible) {
+            audit.atlasVisible += 1;
+            if (obj.userData.nearDetail) audit.nearAtlasVisible += 1;
+            else audit.farAtlasVisible += 1;
+          } else audit.atlasHidden += 1;
+        } else if (layer === "realistic-street") {
+          if (obj.visible) audit.realisticStreetVisible += 1;
+          else audit.realisticStreetHidden += 1;
+        }
+      });
+      return audit;
+    },
     near50Inventory,
     getNear50SurfaceAudit() {
       const surfaces = [];
@@ -416,6 +523,16 @@ async function boot() {
     frameYashan(mode) {
       return frameNo46(mode);
     },
+    framePoint(x, y, z, lookX, lookY, lookZ) {
+      controls.setMode("orbit");
+      camera.fov = 50;
+      camera.updateProjectionMatrix();
+      camera.position.set(x, y, z);
+      controls.orbit.target.set(lookX, lookY, lookZ);
+      controls.orbit.minDistance = 1.2;
+      controls.orbit.update();
+    },
+    buildingRoot: world.group,
     shopList: shops.map((s) => {
       const p = project.toLocal(s.lat, s.lon);
       return { name: s.name, brand: s.kind, x: p.x, z: p.z, floor: s.floor, lat: s.lat, lon: s.lon };

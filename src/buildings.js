@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { centroid, dist2, distanceToRing, exteriorStripClear, nearestRoad, outwardNormal, streetFacingEdge } from "./geo.js";
+import { centroid, dist2, distanceToRing, exteriorStripClear, nearestRoad, outwardNormal, roadFacingEdges, streetFacingEdge } from "./geo.js";
 import { applyAerialUVs, createAerialColorSampler } from "./aerial.js";
 import { displayHeightForLot } from "./lots.js";
 import { localFloorEvidenceForLot } from "./local-floor-evidence.js";
@@ -13,6 +13,7 @@ import { planWallPanels, WINDOW_CUTOUT_WIDTH, WINDOW_CUTOUT_HEIGHT } from "./wal
 import { claddingNormalAsset, createCladdingMaterial } from "./cladding-material.js";
 import { createDrainpipeDetail, drainpipeCenterClear } from "./drainpipe-detail.js";
 import { createZhenfuAnnex, createZhenfuHall, isZhenfuAnnex, isZhenfuHall } from "./temple.js";
+import { applyFacadeMode, facadeAtlasMaterial, normalizeFacadeMode, resolveFacade25d } from "./facade-atlas-25d.js";
 import {
   makeStorefrontTexture,
   makeUpperFloorTexture,
@@ -100,6 +101,20 @@ function insetRing(pts, dist) {
     out.push({ x: pts[i].x + (dx / len) * dist, z: pts[i].z + (dz / len) * dist });
   }
   return out;
+}
+
+function streetIndicesForAtlas(pts, roads, nearDetail) {
+  if (nearDetail) {
+    const nearEdge = streetFacingEdge(pts, roads);
+    const front = nearEdge && Math.sqrt(nearEdge.roadDist) <= 12 ? nearEdge.index : null;
+    const indices = [];
+    if (Number.isInteger(front)) indices.push(front);
+    for (const edge of roadFacingEdges(pts, roads)) {
+      if (!indices.includes(edge.index)) indices.push(edge.index);
+    }
+    return indices;
+  }
+  return roadFacingEdges(pts, roads).map((edge) => edge.index);
 }
 
 function ringCentroid(pts) {
@@ -206,7 +221,10 @@ function addEstimatedResidentialEntry(group, edge, storey, id) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
     mesh.position.set(edge.mx + edge.nx * out, h / 2 + 0.02, edge.mz + edge.nz * out);
     mesh.rotation.y = edge.yaw;
-    mesh.userData = { id, kind: "near50-residential-entry", estimated: true };
+    mesh.userData = {
+      id, kind: "near50-residential-entry", estimated: true,
+      facadeLayer: "realistic-street", nearDetail: true,
+    };
     group.add(mesh);
     return mesh;
   };
@@ -216,6 +234,10 @@ function addEstimatedResidentialEntry(group, edge, storey, id) {
   handle.position.set(edge.mx + edge.nx * 0.19 + Math.sin(edge.yaw + Math.PI / 2) * width * 0.3,
     1.02, edge.mz + edge.nz * 0.19 + Math.cos(edge.yaw + Math.PI / 2) * width * 0.3);
   handle.rotation.y = edge.yaw;
+  handle.userData = {
+    id, kind: "near50-residential-entry", estimated: true,
+    facadeLayer: "realistic-street", nearDetail: true,
+  };
   group.add(handle);
   return true;
 }
@@ -449,7 +471,8 @@ function addAwnings(group, pts, roads, color, nearContext = null) {
   return rejected;
 }
 
-export function createDetailedBuildings(osm, config, project, edits, roofMat, frame, roads, lotData, aerialTex, shops) {
+export function createDetailedBuildings(osm, config, project, edits, roofMat, frame, roads, lotData, aerialTex, shops, options = {}) {
+  const facadeMode = normalizeFacadeMode(options.facadeMode);
   const group = new THREE.Group();
   group.name = "buildings";
   const colliders = [];
@@ -496,6 +519,9 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
   facadeStats.near50NormalMappedBuildings = 0;
   facadeStats.near50DetailedDrainpipes = 0;
   facadeStats.near50DrainpipesOmitted = 0;
+  facadeStats.atlas25dBuildings = 0;
+  facadeStats.atlas25dStreetFaces = 0;
+  facadeStats.facadeMode = facadeMode;
 
   const localShops = localizeShops(shops, project);
   const matched = matchShopsToLots(localShops, lots);
@@ -584,8 +610,18 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
         hero: lot.nearDetail,
       }) : [];
     const recessed = lot.nearDetail && !isShop && !neighbor && !landmark;
+    const atlasIndices = (!isShop && !neighbor && !landmark)
+      ? streetIndicesForAtlas(pts, roads, lot.nearDetail)
+      : [];
+    const openingStreetLayer = atlasIndices.length ? (lot.nearDetail ? "near" : "far") : null;
     const physicalOpenings = canAddOpenings
-      ? facadeDepth.addBuilding({ plans: openingPlans, hero: lot.nearDetail, recessed }) : 0;
+      ? facadeDepth.addBuilding({
+        plans: openingPlans,
+        hero: lot.nearDetail,
+        recessed,
+        streetLayer: openingStreetLayer,
+        atlasEdges: openingStreetLayer ? new Set(atlasIndices) : null,
+      }) : 0;
     const wallOpenings = recessed ? new Map(openingPlans.map(({ edge, openings }) => [edge.index,
       openings.map((opening) => ({ x: edge.len * opening.t, y: opening.y,
         w: WINDOW_CUTOUT_WIDTH * opening.sx, h: WINDOW_CUTOUT_HEIGHT * opening.sy }))])) : null;
@@ -669,19 +705,33 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
         facadeStats.near50DistantRoadFrontsSuppressed += 1;
       }
       const splitUpper = Number.isInteger(frontEdgeIndex);
-      const storeGeo = makeWallGeometry(pts, 0.01, storey, bay, 1,
-        (i) => !lot.nearDetail || i !== frontEdgeIndex, wallOpenings);
+      const atlasEdgeSet = new Set(atlasIndices);
+      const isParty = (i) => !atlasEdgeSet.has(i);
+      const isFront = (i) => splitUpper && i === frontEdgeIndex;
+      const isExtraStreet = (i) => atlasEdgeSet.has(i) && !isFront(i);
+      const storeGeo = makeWallGeometry(pts, 0.01, storey, bay, 1, isParty, wallOpenings);
       const frontStoreGeo = splitUpper
-        ? makeWallGeometry(pts, 0.01, storey, bay, 1, (i) => i === frontEdgeIndex, wallOpenings)
+        ? makeWallGeometry(pts, 0.01, storey, bay, 1, isFront, wallOpenings)
         : null;
-      const upperGeo = bodyH - storey > 0.4
-        ? makeWallGeometry(pts, storey, bodyH, bay, upperFloors, (i) => !splitUpper || i !== frontEdgeIndex, wallOpenings)
+      const extraStoreGeo = makeWallGeometry(pts, 0.01, storey, bay, 1, isExtraStreet, wallOpenings);
+      const upperSpan = bodyH - storey > 0.4;
+      const upperGeo = upperSpan
+        ? makeWallGeometry(pts, storey, bodyH, bay, upperFloors, isParty, wallOpenings)
         : null;
-      const frontUpperGeo = splitUpper
-        ? makeWallGeometry(pts, storey, bodyH, bay, upperFloors, (i) => i === frontEdgeIndex, wallOpenings)
+      const frontUpperGeo = splitUpper && upperSpan
+        ? makeWallGeometry(pts, storey, bodyH, bay, upperFloors, isFront, wallOpenings)
+        : null;
+      const extraUpperGeo = upperSpan
+        ? makeWallGeometry(pts, storey, bodyH, bay, upperFloors, isExtraStreet, wallOpenings)
         : null;
       const capGeo = capH > 0.4 ? makeWallGeometry(pts, bodyH, height, bay, 1, null, wallOpenings) : null;
-      if (!storeGeo && !frontStoreGeo) continue;
+      const atlasRecipe = atlasEdgeSet.size
+        ? resolveFacade25d(b, { height: Math.max(bodyH, 2.2), kindHint: kind })
+        : null;
+      const atlasGeo = atlasRecipe
+        ? makeWallGeometry(pts, 0.01, Math.max(bodyH, storey + 0.05), atlasRecipe.bayWidth, 1, (i) => atlasEdgeSet.has(i))
+        : null;
+      if (!storeGeo && !frontStoreGeo && !extraStoreGeo && !atlasGeo) continue;
       let storeMap;
       if (lot.nearDetail && groundShop) {
         // A single business name repeated on every side of a merged footprint
@@ -696,56 +746,86 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
       } else {
         storeMap = makeStorefrontTexture(color, seed, kind, facade.style);
       }
-      if (storeGeo) {
-        const sideMat = lot.nearDetail
-          ? near50CladdingMat(facade.style, groundShop?.color || color, "ground")
-          : wallMat(storeMap);
-        const storeMesh = new THREE.Mesh(storeGeo, sideMat);
-        storeMesh.userData = lot.nearDetail
-          ? { ...lotLabel, kind: "near50-side-wall", level: "ground", estimated: true }
-          : lotLabel;
-        group.add(storeMesh);
+      const addShell = (geo, material, userData, street) => {
+        if (!geo) return;
+        const mesh = new THREE.Mesh(geo, material);
+        mesh.userData = userData;
+        if (street && atlasGeo) {
+          mesh.userData.facadeLayer = "realistic-street";
+          mesh.userData.nearDetail = lot.nearDetail;
+        }
+        group.add(mesh);
+      };
+      const sideGroundMat = lot.nearDetail
+        ? near50CladdingMat(facade.style, groundShop?.color || color, "ground")
+        : wallMat(storeMap);
+      const sideGroundData = lot.nearDetail
+        ? { ...lotLabel, kind: "near50-side-wall", level: "ground", estimated: true }
+        : lotLabel;
+      if (storeGeo || (extraStoreGeo && lot.nearDetail)) {
         if (lot.nearDetail) {
           facadeStats.near50PlainSideGround += 1;
           facadeStats.near50Cc0Cladding += 1;
         }
       }
+      addShell(storeGeo, sideGroundMat, sideGroundData, false);
+      addShell(extraStoreGeo, sideGroundMat, { ...sideGroundData }, true);
       if (frontStoreGeo) {
         const frontMat = lot.nearDetail && !groundShop
           ? near50CladdingMat(facade.style, color, "ground")
           : wallMat(storeMap);
-        const frontMesh = new THREE.Mesh(frontStoreGeo, frontMat);
-        frontMesh.userData = lotLabel;
-        group.add(frontMesh);
+        addShell(frontStoreGeo, frontMat, { ...lotLabel }, true);
         if (lot.nearDetail && !groundShop && addEstimatedResidentialEntry(group, nearEdge, storey, b.id)) {
           facadeStats.near50NeutralEntries += 1;
         }
       }
-      if (upperGeo || frontUpperGeo) {
+      if (upperGeo || frontUpperGeo || extraUpperGeo) {
         const upperMap = lot.nearDetail
           ? makeUpperFloorTexture(color, seed, kind, facade.style, false)
           : upperShop?.brand === "yangxin"
           ? makeYangxinUpperTexture()
           : makeUpperFloorTexture(color, seed, kind, facade.style);
-        if (upperGeo) {
-          const sideMesh = new THREE.Mesh(upperGeo, lot.nearDetail
-            ? near50CladdingMat(facade.style, color, "upper") : wallMat(upperMap));
-          if (lot.nearDetail) {
-            sideMesh.userData = { ...lotLabel, kind: "near50-side-wall", level: "upper", estimated: true };
-            facadeStats.near50PlainSideUpper += 1;
-          }
-          group.add(sideMesh);
-        }
+        const sideUpperMat = lot.nearDetail
+          ? near50CladdingMat(facade.style, color, "upper") : wallMat(upperMap);
+        const sideUpperData = lot.nearDetail
+          ? { ...lotLabel, kind: "near50-side-wall", level: "upper", estimated: true }
+          : { ...lotLabel };
+        if (lot.nearDetail && (upperGeo || extraUpperGeo)) facadeStats.near50PlainSideUpper += 1;
+        addShell(upperGeo, sideUpperMat, sideUpperData, false);
+        addShell(extraUpperGeo, sideUpperMat, { ...sideUpperData }, true);
         if (frontUpperGeo) {
           const frontMap = upperShop?.brand === "yangxin"
             ? makeYangxinUpperTexture()
             : makeUpperFloorTexture(color, seed, kind, facade.style, !plainNearUpper);
-          const frontUpper = new THREE.Mesh(frontUpperGeo, lot.nearDetail && plainNearUpper
-            ? near50CladdingMat(facade.style, color, "upper") : wallMat(frontMap));
-          frontUpper.userData = { ...lotLabel, kind: "near50-front-wall", level: "upper", estimated: true };
-          group.add(frontUpper);
+          const frontUpperMat = lot.nearDetail && plainNearUpper
+            ? near50CladdingMat(facade.style, color, "upper") : wallMat(frontMap);
+          addShell(frontUpperGeo, frontUpperMat, {
+            ...lotLabel, kind: "near50-front-wall", level: "upper", estimated: true,
+          }, true);
           if (plainNearUpper && upperShop?.brand !== "yangxin") facadeStats.near50PlainUpper += 1;
         }
+      }
+      if (atlasGeo && atlasRecipe) {
+        const atlasMesh = new THREE.Mesh(
+          atlasGeo,
+          facadeAtlasMaterial(atlasRecipe.kind, atlasRecipe.floors, atlasRecipe.variant)
+        );
+        atlasMesh.name = "facade-atlas-25d";
+        atlasMesh.userData = {
+          ...lotLabel,
+          kind: "facade-atlas-25d",
+          facadeLayer: "atlas25d",
+          nearDetail: lot.nearDetail,
+          recipe: atlasRecipe.key,
+          recipeKind: atlasRecipe.kind,
+          recipeLabel: atlasRecipe.label,
+          floors: atlasRecipe.floors,
+          estimated: true,
+          procedural: true,
+        };
+        group.add(atlasMesh);
+        facadeStats.atlas25dBuildings += 1;
+        facadeStats.atlas25dStreetFaces += atlasEdgeSet.size;
       }
       if (capGeo) group.add(new THREE.Mesh(capGeo, wallMat(makeMetalCapTexture(color, seed))));
     }
@@ -849,6 +929,7 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
   }
 
   const depthStats = facadeDepth.finish(group);
+  applyFacadeMode(group, facadeMode);
   landmarkViews.corner = {
     x: 38,
     y: 11,
@@ -901,6 +982,9 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
       near50NormalMappedBuildings: facadeStats.near50NormalMappedBuildings,
       near50DetailedDrainpipes: facadeStats.near50DetailedDrainpipes,
       near50DrainpipesOmitted: facadeStats.near50DrainpipesOmitted,
+      atlas25dBuildings: facadeStats.atlas25dBuildings,
+      atlas25dStreetFaces: facadeStats.atlas25dStreetFaces,
+      facadeMode: facadeStats.facadeMode,
     },
   };
 }
