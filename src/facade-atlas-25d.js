@@ -18,13 +18,16 @@ export const KIND_LABEL_25D = {
 };
 
 const WALLS = {
-  shophouse: ["#efe2cf", "#e7d3b4", "#f4e7d6"],
-  apt: ["#d9d3c8", "#cfc6b8", "#e4ddd2"],
-  mid: ["#c5cdd4", "#b7c3cc", "#d5dde3"],
-  temple: ["#f3e6cf", "#ead6b4", "#f7edd9"],
-  civic: ["#e7e2d6", "#ddd6c8", "#efeae0"],
+  shophouse: ["#efe2cf", "#e7d3b4", "#f4e7d6", "#e8d4c0"],
+  apt: ["#d9d3c8", "#cfc6b8", "#e4ddd2", "#d3cdc2"],
+  mid: ["#c5cdd4", "#b7c3cc", "#d5dde3", "#c9d0d4"],
+  temple: ["#f3e6cf", "#ead6b4", "#f7edd9", "#efe0c8"],
+  civic: ["#e7e2d6", "#ddd6c8", "#efeae0", "#e3ddd0"],
 };
-const SIGNS = ["#c44536", "#d89a1a", "#2f6f4e"];
+const SIGNS = ["#c44536", "#d89a1a", "#2f6f4e", "#24577a"];
+const GLASS = ["#7ea0b3", "#6f93a8", "#89a9b8", "#7698a6"];
+const GLOW = ["#f0d7a4", "#e7c98a", "#f3dcb0", "#edd3a2"];
+export const FACADE_25D_VARIANT_COUNT = 4;
 const RECIPE_FLOORS = {
   shophouse: [3, 4, 3, 2],
   apt: [5, 5, 6, 4],
@@ -130,7 +133,7 @@ export function resolveFacade25d(building = {}, extra = {}) {
   };
   const kind = classifyFacade25d(tags, seed, extra.kindHint || extra.kind || "");
   const spec = measureFacade25d(tags, kind, seed, extra.height);
-  const variant = seed % 3;
+  const variant = seed % FACADE_25D_VARIANT_COUNT;
   return {
     kind,
     label: KIND_LABEL_25D[kind] || KIND_LABEL_25D.shophouse,
@@ -173,59 +176,171 @@ export function applyFacadeMode(root, mode) {
   return selected;
 }
 
-function paintWindow(ctx, x, y, w, h, lit) {
-  ctx.fillStyle = "#2c3134";
+function paintWindow(ctx, x, y, w, h, lit, variant = 0) {
+  const glass = lit ? GLOW[variant] || GLOW[0] : GLASS[variant] || GLASS[0];
+  ctx.fillStyle = "#243036";
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = lit ? "#f0d7a4" : "#7ea0b3";
-  ctx.fillRect(x + 3, y + 3, w - 6, h - 6);
+  ctx.fillStyle = "#d9d1c4";
+  ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+  ctx.fillStyle = glass;
+  ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
+  ctx.fillStyle = "rgba(255,255,255,0.42)";
+  ctx.fillRect(x + 5, y + 5, Math.max(2, Math.round(w * 0.18)), Math.max(4, h - 14));
+  ctx.fillStyle = "rgba(18, 32, 42, 0.22)";
+  ctx.fillRect(x + 4, y + Math.round(h * 0.62), w - 8, Math.max(3, Math.round(h * 0.28)));
+  ctx.fillStyle = "#6e6458";
+  ctx.fillRect(x - 1, y + h - 2, w + 2, 3);
   ctx.strokeStyle = "rgba(28, 34, 38, 0.55)";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(x + w / 2, y + 3);
-  ctx.lineTo(x + w / 2, y + h - 3);
-  ctx.moveTo(x + 3, y + h / 2);
-  ctx.lineTo(x + w - 3, y + h / 2);
+  ctx.moveTo(x + w / 2, y + 4);
+  ctx.lineTo(x + w / 2, y + h - 4);
+  ctx.moveTo(x + 4, y + h / 2);
+  ctx.lineTo(x + w - 4, y + h / 2);
   ctx.stroke();
 }
 
-function paintSign(ctx, x, y, w, h, color) {
+function paintSign(ctx, x, y, w, h, color, depth) {
+  if (depth) {
+    ctx.fillStyle = "#6a2c24";
+    ctx.fillRect(x + 2, y + 3, w, h);
+  }
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "rgba(255, 236, 210, 0.55)";
+  ctx.fillRect(x, y, w, 2);
   ctx.fillStyle = "rgba(255, 248, 230, 0.92)";
-  const blocks = 3;
-  const gap = 4;
-  const bw = (w - gap * (blocks + 1)) / blocks;
-  for (let i = 0; i < blocks; i += 1) {
-    ctx.fillRect(x + gap + i * (bw + gap), y + 4, bw, h - 8);
+  const widths = [0.34, 0.22, 0.28, 0.18];
+  const gap = 3;
+  let cursor = x + gap;
+  const count = 2 + (Math.abs(color.length) % 2);
+  for (let i = 0; i < count; i += 1) {
+    const bw = Math.max(6, Math.round((w - gap * (count + 1)) * widths[i % widths.length]));
+    if (cursor + bw > x + w - gap) break;
+    ctx.fillRect(cursor, y + 4, bw, h - 8);
+    cursor += bw + gap;
+  }
+}
+
+export function facadeDetailPlan(kind, variant) {
+  const safeKind = WALLS[kind] ? kind : "shophouse";
+  const v = Math.abs(variant | 0) % FACADE_25D_VARIANT_COUNT;
+  const shop = safeKind === "shophouse";
+  const apt = safeKind === "apt";
+  const mid = safeKind === "mid";
+  const civic = safeKind === "civic";
+  return {
+    kind: safeKind,
+    variant: v,
+    windowFrames: safeKind !== "temple",
+    edgeShadow: true,
+    glassSheen: safeKind !== "temple",
+    awning: shop && (v === 0 || v === 2),
+    rainCover: (shop && (v === 1 || v === 2)) || civic || (mid && v !== 0),
+    balcony: apt,
+    acUnit: (apt || mid || shop) && (v === 1 || v === 3),
+    pipe: (apt || mid || shop) && (v === 1 || v === 3),
+    signDepth: shop || mid || civic,
+    shopBays: shop ? (v % 2 === 0 ? 2 : 3) : (mid ? 2 : 0),
+    nightGlass: v === 1 || v === 3,
+  };
+}
+
+function paintEdge(ctx, width, height) {
+  ctx.fillStyle = "rgba(28, 22, 16, 0.34)";
+  ctx.fillRect(0, 0, 3, height);
+  ctx.fillRect(width - 3, 0, 3, height);
+  ctx.fillStyle = "rgba(255, 248, 236, 0.16)";
+  ctx.fillRect(3, 0, 2, height);
+}
+
+function paintAwning(ctx, y) {
+  ctx.fillStyle = "#b5523a";
+  ctx.fillRect(6, y + 23, BAY_PX - 12, 7);
+  ctx.fillStyle = "#7a3428";
+  ctx.fillRect(8, y + 29, BAY_PX - 16, 3);
+}
+
+function paintRainCover(ctx, y) {
+  ctx.fillStyle = "#6f7c84";
+  ctx.fillRect(4, y + 2, BAY_PX - 8, 4);
+  ctx.fillStyle = "rgba(20, 24, 28, 0.35)";
+  ctx.fillRect(6, y + 6, BAY_PX - 12, 2);
+}
+
+function paintAc(ctx, x, y) {
+  ctx.fillStyle = "#d5dde2";
+  ctx.fillRect(x, y, 14, 11);
+  ctx.fillStyle = "#8ea0aa";
+  ctx.fillRect(x + 2, y + 2, 10, 3);
+  ctx.fillStyle = "#b7c3c8";
+  ctx.fillRect(x + 2, y + 6, 10, 3);
+}
+
+function paintPipe(ctx, x, y, length) {
+  ctx.fillStyle = "#8e9898";
+  ctx.fillRect(x, y, 2, length);
+  ctx.fillStyle = "rgba(20, 24, 28, 0.28)";
+  ctx.fillRect(x + 2, y, 1, length);
+}
+
+function paintBalcony(ctx, y) {
+  ctx.fillStyle = "#b7aea2";
+  ctx.fillRect(14, y + 50, 58, 5);
+  ctx.fillStyle = "#8d8478";
+  ctx.fillRect(14, y + 46, 58, 2);
+  for (let rail = 18; rail < 70; rail += 7) ctx.fillRect(rail, y + 40, 2, 10);
+  ctx.fillStyle = "rgba(40, 36, 28, 0.2)";
+  ctx.fillRect(16, y + 55, 54, 2);
+}
+
+function paintShopBays(ctx, y, bays, floorH) {
+  const top = y + 33;
+  const height = floorH - 38;
+  const gap = 6;
+  const inner = BAY_PX - 16;
+  const bayW = (inner - gap * (bays - 1)) / bays;
+  for (let i = 0; i < bays; i += 1) {
+    const x = 8 + i * (bayW + gap);
+    ctx.fillStyle = i === bays - 1 ? "#6e8c9e" : "#7f97a4";
+    ctx.fillRect(x, top, bayW, height);
+    ctx.fillStyle = "rgba(255,255,255,0.28)";
+    ctx.fillRect(x + 2, top + 2, 4, height - 6);
+    if (i === Math.floor(bays / 2)) {
+      ctx.fillStyle = "#3e2c24";
+      ctx.fillRect(x + bayW * 0.28, top + 10, bayW * 0.44, height - 12);
+    }
+  }
+  ctx.fillStyle = "#4a3b32";
+  ctx.fillRect(0, y + 32, 8, floorH - 32);
+  ctx.fillRect(BAY_PX - 8, y + 32, 8, floorH - 32);
+  for (let i = 1; i < bays; i += 1) {
+    const x = 8 + i * (bayW + gap) - gap;
+    ctx.fillRect(x, y + 32, gap, floorH - 32);
   }
 }
 
 export function paintFacadeAtlas(ctx, kind, floors, variant) {
-  const safeKind = WALLS[kind] ? kind : "shophouse";
+  const plan = facadeDetailPlan(kind, variant);
+  const safeKind = plan.kind;
   const safeFloors = Math.max(1, Math.min(14, Math.round(floors) || 1));
-  const safeVariant = Math.abs(variant | 0) % 3;
+  const safeVariant = plan.variant;
   const width = BAY_PX;
   const height = FLOOR_PX * safeFloors;
   ctx.fillStyle = WALLS[safeKind][safeVariant];
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "rgba(40, 36, 28, 0.08)";
-  ctx.fillRect(0, 0, 5, height);
-  ctx.fillRect(width - 5, 0, 5, height);
+  paintEdge(ctx, width, height);
 
   for (let floor = 0; floor < safeFloors; floor += 1) {
     const y = height - (floor + 1) * FLOOR_PX;
     const lit = (floor + safeVariant) % 3 === 0;
+    ctx.fillStyle = "rgba(40, 36, 28, 0.16)";
+    ctx.fillRect(0, y, width, 3);
     if (safeKind === "shophouse" && floor === 0) {
-      paintSign(ctx, 8, y + 6, BAY_PX - 16, 16, SIGNS[safeVariant]);
-      ctx.fillStyle = "#5c4a3a";
-      ctx.fillRect(0, y + 26, 10, FLOOR_PX - 26);
-      ctx.fillRect(BAY_PX - 10, y + 26, 10, FLOOR_PX - 26);
-      ctx.fillStyle = "#6e8c9e";
-      ctx.fillRect(14, y + 30, BAY_PX - 28, FLOOR_PX - 38);
-      ctx.fillStyle = "#3e2c24";
-      ctx.fillRect(18, y + 40, 16, FLOOR_PX - 42);
-      ctx.fillStyle = "rgba(255,255,255,0.28)";
-      ctx.fillRect(16, y + 32, 6, FLOOR_PX - 44);
+      if (plan.rainCover) paintRainCover(ctx, y);
+      paintSign(ctx, 8, y + 8, BAY_PX - 16, 14, SIGNS[safeVariant], plan.signDepth);
+      if (plan.awning) paintAwning(ctx, y);
+      paintShopBays(ctx, y, plan.shopBays || 2, FLOOR_PX);
     } else if (safeKind === "temple" && floor === 0) {
       ctx.fillStyle = "#8c2f2f";
       ctx.fillRect(6, y + 8, 12, FLOOR_PX - 10);
@@ -234,58 +349,75 @@ export function paintFacadeAtlas(ctx, kind, floors, variant) {
       ctx.fillRect(34, y + 28, 28, FLOOR_PX - 30);
       ctx.fillStyle = "#e6c56a";
       ctx.fillRect(44, y + 40, 8, 12);
+      ctx.strokeStyle = "#8c2f2f";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(38, y + 34);
+      ctx.lineTo(58, y + 34);
+      ctx.moveTo(48, y + 32);
+      ctx.lineTo(48, y + FLOOR_PX - 6);
+      ctx.stroke();
     } else if (safeKind === "mid" && floor === 0) {
+      if (plan.rainCover) paintRainCover(ctx, y);
       ctx.fillStyle = "#8d9394";
-      ctx.fillRect(0, y + FLOOR_PX - 10, BAY_PX, 10);
-      paintSign(ctx, 10, y + 8, BAY_PX - 20, 12, "#3d4c55");
-      ctx.fillStyle = "#8eacbc";
-      ctx.fillRect(8, y + 26, BAY_PX - 16, FLOOR_PX - 40);
+      ctx.fillRect(0, y + FLOOR_PX - 8, BAY_PX, 8);
+      paintSign(ctx, 10, y + 8, BAY_PX - 20, 12, "#3d4c55", plan.signDepth);
+      paintShopBays(ctx, y, 2, FLOOR_PX);
     } else if (safeKind === "civic" && floor === 0) {
+      if (plan.rainCover) paintRainCover(ctx, y);
       ctx.fillStyle = "#3e5c49";
       ctx.fillRect(8, y + 8, BAY_PX - 16, 10);
-      ctx.fillStyle = "#6d8494";
-      ctx.fillRect(14, y + 26, BAY_PX - 28, FLOOR_PX - 34);
+      paintWindow(ctx, 12, y + 24, 28, 36, false, safeVariant);
       ctx.fillStyle = "#3f4f46";
-      ctx.fillRect(40, y + 36, 18, FLOOR_PX - 38);
+      ctx.fillRect(52, y + 30, 28, FLOOR_PX - 34);
+      ctx.fillStyle = "#d7c48a";
+      ctx.fillRect(60, y + 40, 12, 8);
     } else if (safeKind === "mid") {
+      const paneW = 36;
+      paintWindow(ctx, 8, y + 16, paneW, 34, lit, safeVariant);
+      paintWindow(ctx, BAY_PX - 8 - paneW, y + 16, paneW, 34, (floor + safeVariant) % 2 === 0, safeVariant);
       ctx.fillStyle = "#9aa8b0";
-      ctx.fillRect(6, y + 8, BAY_PX - 12, 14);
-      ctx.fillStyle = lit ? "#d5e4ea" : "#6f92a6";
-      ctx.fillRect(6, y + 22, BAY_PX - 12, 36);
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
-      ctx.fillRect(8, y + 24, 10, 30);
+      ctx.fillRect(6, y + 8, BAY_PX - 12, 5);
     } else if (safeKind === "temple") {
       ctx.fillStyle = "#8c2f2f";
       ctx.fillRect(8, y + 6, 8, FLOOR_PX - 12);
       ctx.fillRect(BAY_PX - 16, y + 6, 8, FLOOR_PX - 12);
-      paintWindow(ctx, 30, y + 16, 36, 40, false);
-    } else {
-      paintWindow(ctx, 22, y + 12, 52, 40, lit && safeKind === "apt");
-      if (safeKind === "apt") {
-        ctx.fillStyle = "#9aa3a8";
-        ctx.fillRect(78, y + 22, 10, 16);
-        ctx.fillStyle = "#b7aea2";
-        ctx.fillRect(16, y + 54, 64, 4);
-        ctx.fillStyle = "#8d8478";
-        for (let rail = 20; rail < 78; rail += 8) ctx.fillRect(rail, y + 48, 2, 8);
+      paintWindow(ctx, 28, y + 14, 40, 40, false, 0);
+    } else if (safeKind === "shophouse") {
+      const bays = plan.shopBays || 2;
+      const gap = 8;
+      const paneW = Math.floor((BAY_PX - 20 - gap * (bays - 1)) / bays);
+      for (let bay = 0; bay < bays; bay += 1) {
+        const x = 10 + bay * (paneW + gap);
+        paintWindow(ctx, x, y + 14, paneW, 34, lit && bay === 0, safeVariant);
       }
+    } else {
+      paintWindow(ctx, 18, y + 10, 28, 32, lit, safeVariant);
+      paintWindow(ctx, 52, y + 10, 28, 32, (floor + safeVariant) % 2 === 1, safeVariant);
+      if (plan.balcony && floor % 2 === safeVariant % 2) paintBalcony(ctx, y);
     }
+    if (plan.acUnit && floor > 0 && floor % 2 === (safeVariant % 2)) paintAc(ctx, 78, y + 18);
+    if (plan.pipe && floor === safeFloors - 1) paintPipe(ctx, 84, 8, Math.max(12, height - 16));
   }
 
   if (safeKind === "temple") {
     ctx.fillStyle = "#8d3b32";
     ctx.fillRect(0, 0, width, 8);
+    ctx.fillStyle = "#e6c56a";
+    ctx.fillRect(0, 8, width, 2);
   } else {
-    ctx.fillStyle = "rgba(40, 36, 28, 0.18)";
-    ctx.fillRect(0, 0, width, 4);
+    ctx.fillStyle = "rgba(40, 36, 28, 0.28)";
+    ctx.fillRect(0, 0, width, 5);
+    ctx.fillStyle = "rgba(255, 248, 236, 0.2)";
+    ctx.fillRect(0, 5, width, 2);
   }
-  return { width, height, kind: safeKind, floors: safeFloors, variant: safeVariant };
+  return { width, height, kind: safeKind, floors: safeFloors, variant: safeVariant, details: plan };
 }
 
 function recipeKey(kind, floors, variant) {
   const safeKind = WALLS[kind] ? kind : "shophouse";
   const safeFloors = Math.max(1, Math.min(14, Math.round(floors) || 1));
-  const safeVariant = Math.abs(variant | 0) % 3;
+  const safeVariant = Math.abs(variant | 0) % FACADE_25D_VARIANT_COUNT;
   return { kind: safeKind, floors: safeFloors, variant: safeVariant, key: `${safeKind}:${safeFloors}:${safeVariant}` };
 }
 

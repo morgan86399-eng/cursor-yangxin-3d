@@ -137,10 +137,17 @@ button.is-on, button:hover { background: var(--accent); border-color: transparen
 }
 .farm-panel[hidden] { display: none; }
 .farm-panel span { color: #ded0ba; font-size: .84rem; }
-.farm-panel > button { grid-row: 1 / 3; grid-column: 2; }
+.farm-panel > button { grid-row: 1 / 3; grid-column: 2; min-width: 112px; min-height: 48px; font-weight: 700; }
+.farm-panel > button:disabled { opacity: .62; cursor: default; }
 .crop-picker { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; max-height: 36vh; overflow: auto; }
+.crop-picker button { min-height: 48px; }
+.crop-picker button:disabled { opacity: .55; }
 .crop-picker[hidden] { display: none; }
 .farm-sync { position: fixed; right: 12px; top: 12px; z-index: 4; padding: 8px 12px; border-radius: 999px; background: rgba(24,16,10,.72); font-size: 12px; }
+.farm-sync.is-ready { background: rgba(28, 72, 48, .9); }
+.farm-sync.is-guest { background: rgba(92, 62, 28, .92); }
+.farm-sync.is-offline { background: rgba(122, 42, 32, .92); }
+.farm-sync.is-syncing { background: rgba(42, 48, 58, .9); }
 .model-note { position: fixed; left: 12px; bottom: 8px; z-index: 2; margin: 0; max-width: 58vw; font-size: 11px; color: #efe4d2; text-shadow: 0 1px 4px #000; }
 .legal-note {
   position: fixed;

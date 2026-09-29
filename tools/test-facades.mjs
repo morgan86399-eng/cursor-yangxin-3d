@@ -7,12 +7,14 @@ import { displayHeightForLot } from "../src/lots.js";
 import { decorativeCapHeight, makeWallGeometry, resolveBuildingProfile } from "../src/buildings.js";
 import {
   BAY_PX,
+  FACADE_25D_VARIANT_COUNT,
   FLOOR_PX,
   applyFacadeMode,
   bayWidthForKind,
   classifyFacade25d,
   clearFacadeAtlasCache,
   facadeAtlasMaterial,
+  facadeDetailPlan,
   facadeLayerVisible,
   measureFacade25d,
   paintFacadeAtlas,
@@ -245,10 +247,62 @@ try {
   const painted = paintFacadeAtlas(recorder, "shophouse", 3, 0);
   assert.equal(painted.width, BAY_PX);
   assert.equal(painted.height, FLOOR_PX * 3);
+  assert.equal(painted.details.awning, true);
+  assert.equal(painted.details.signDepth, true);
+  assert.equal(painted.details.shopBays, 2);
+  assert.equal(painted.details.windowFrames, true);
+  assert.equal(painted.details.edgeShadow, true);
   assert.equal(recorded.fills[0].color, "#efe2cf");
   assert.ok(recorded.fills.some((fill) => fill.color === "#c44536"), "shophouse ground floor keeps a sign band");
+  assert.ok(recorded.fills.some((fill) => fill.color === "#6a2c24"), "sign board keeps a thickness shadow");
+  assert.ok(recorded.fills.some((fill) => fill.color === "#b5523a"), "shophouse keeps an awning");
+  assert.ok(recorded.fills.some((fill) => fill.color === "#4a3b32"), "ground floor keeps shop-bay partitions");
+  assert.ok(recorded.fills.some((fill) => fill.color === "#d9d1c4"), "windows keep a frame lip");
+  assert.ok(recorded.fills.some((fill) => fill.color === "rgba(28, 22, 16, 0.34)"), "facade keeps an edge shadow");
   assert.ok(recorded.fills.some((fill) => fill.color === "#7ea0b3" || fill.color === "#f0d7a4"),
     "upper floors keep a window grid");
+  const utility = { fills: [] };
+  const utilityCtx = {
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
+    fillRect(x, y, width, height) { utility.fills.push({ x, y, width, height, color: this.fillStyle }); },
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+  };
+  const utilityPaint = paintFacadeAtlas(utilityCtx, "shophouse", 4, 1);
+  assert.equal(utilityPaint.details.rainCover, true);
+  assert.equal(utilityPaint.details.acUnit, true);
+  assert.equal(utilityPaint.details.pipe, true);
+  assert.equal(utilityPaint.details.shopBays, 3);
+  assert.ok(utility.fills.some((fill) => fill.color === "#6f7c84"), "utility variant keeps a rain cover");
+  assert.ok(utility.fills.some((fill) => fill.color === "#d5dde2"), "utility variant keeps an outdoor AC unit");
+  assert.ok(utility.fills.some((fill) => fill.color === "#8e9898"), "utility variant keeps a pipe");
+  assert.notEqual(utility.fills.map((fill) => fill.color).join("|"), recorded.fills.map((fill) => fill.color).join("|"),
+    "recipe variants must not repeat the same facade");
+  const aptPlan = facadeDetailPlan("apt", 1);
+  assert.equal(aptPlan.balcony, true);
+  assert.equal(aptPlan.acUnit, true);
+  const templePlan = facadeDetailPlan("temple", 1);
+  assert.equal(templePlan.acUnit, false);
+  assert.equal(templePlan.windowFrames, false);
+  const variants = new Set();
+  const recipes = new Set();
+  for (let i = 0; i < 80; i += 1) {
+    const spec = resolveFacade25d({
+      id: `street/${i}`,
+      building: i % 2 ? "apartments" : "retail",
+      levels: 2 + (i % 6),
+    });
+    variants.add(spec.variant);
+    recipes.add(spec.key);
+    assert.ok(spec.variant >= 0 && spec.variant < FACADE_25D_VARIANT_COUNT);
+  }
+  assert.ok(variants.size >= 3, `variants collapsed: ${[...variants]}`);
+  assert.ok(recipes.size >= 8, "street recipes should not all share one atlas");
+  assert.ok(recipes.size <= 5 * 14 * FACADE_25D_VARIANT_COUNT, `too many unique materials ${recipes.size}`);
   const first = facadeAtlasMaterial("shophouse", 3, 0);
   const again = facadeAtlasMaterial("shophouse", 3, 0);
   const other = facadeAtlasMaterial("apt", 5, 1);
