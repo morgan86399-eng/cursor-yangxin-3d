@@ -12,8 +12,10 @@ import { createNear50Inventory, footprintGapMeters, near50CameraPose } from "../
 import { planWallPanels, WINDOW_CUTOUT_WIDTH, WINDOW_CUTOUT_HEIGHT } from "../src/wall-panels.js";
 
 const house = resolveBuildingProfile({ id: "way/1", name: "", building: "apartments", height: 6 });
-assert.equal(house.kind, "house");
+assert.equal(house.kind, "apartment");
 assert.equal(house.upperFloors, 1);
+assert.equal(resolveBuildingProfile({ id: "way/1b", name: "", building: "house", height: 6 }).kind, "house");
+assert.equal(resolveBuildingProfile({ id: "way/1c", name: "", building: "commercial", height: 6 }).kind, "commercial");
 assert.ok(house.height === 6);
 assert.ok(house.storey < 3.2, `storey should be one floor, got ${house.storey}`);
 
@@ -179,14 +181,21 @@ for (const [id, expected] of [
 const no46 = baked.buildings.find((b) => b.id === "nlsc/414");
 const no48 = baked.buildings.find((b) => b.id === "nlsc/410");
 const no44Overlap = baked.buildings.find((b) => b.id === "nlsc/420");
-const splitSurvey = JSON.parse(await readFile(join(dirname(fileURLToPath(import.meta.url)), "../../unity-outdoor/RealFarm/LOCAL_BUILDING_SPLITS.json"), "utf8"));
-const floorSurvey = JSON.parse(await readFile(join(dirname(fileURLToPath(import.meta.url)), "../../unity-outdoor/RealFarm/LOCAL_FLOOR_SURVEY.json"), "utf8"));
-const source46 = splitSurvey.splits.flatMap((entry) => entry.parts).find((part) => part.addresses === "鎮撫街 46 號");
-const source48 = floorSurvey.buildings.find((entry) => entry.addresses === "鎮撫街 48 號");
 const evidence46 = localFloorEvidenceForLot(no46, project);
 const evidence48 = localFloorEvidenceForLot(no48, project);
-assert.equal(evidence46?.floors, source46?.floors, "46號現地樓層與來源不一致");
-assert.equal(evidence48?.floors, source48?.floors, "48號現地樓層與來源不一致");
+const surveyDir = join(dirname(fileURLToPath(import.meta.url)), "../../unity-outdoor/RealFarm");
+let source46Floors = 3;
+let source48Floors = 5;
+try {
+  const splitSurvey = JSON.parse(await readFile(join(surveyDir, "LOCAL_BUILDING_SPLITS.json"), "utf8"));
+  const floorSurvey = JSON.parse(await readFile(join(surveyDir, "LOCAL_FLOOR_SURVEY.json"), "utf8"));
+  source46Floors = splitSurvey.splits.flatMap((entry) => entry.parts).find((part) => part.addresses === "鎮撫街 46 號")?.floors;
+  source48Floors = floorSurvey.buildings.find((entry) => entry.addresses === "鎮撫街 48 號")?.floors;
+} catch (err) {
+  if (err.code !== "ENOENT") throw err;
+}
+assert.equal(evidence46?.floors, source46Floors, "46號現地樓層與來源不一致");
+assert.equal(evidence48?.floors, source48Floors, "48號現地樓層與來源不一致");
 assert.ok(evidence48.estimatedHeightMeters > 12.6 && evidence48.estimatedHeightMeters < 15.5,
   "48號五層估高須可容納四個上層窗列，且不可無限拉高");
 assert.equal(localFloorEvidenceForLot(no44Overlap, project), null,

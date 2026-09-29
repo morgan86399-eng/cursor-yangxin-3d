@@ -300,6 +300,7 @@ export function createSigns(shops, roads, project, radius, colliders) {
 
   for (const shop of shops || []) {
     if (dressOwnsShopSign(shop) || facadeOwnsListedSign(shop) || modeledSigns.has(shop.id) || plaqueNames.has(shop.name)) continue;
+    if (["temple", "civic", "market", "police"].includes(String(shop.kind || ""))) continue;
     const p = project.toLocal(shop.lat, shop.lon);
     if (p.x * p.x + p.z * p.z > r2) continue;
     const near = p.x * p.x + p.z * p.z <= nearR2;

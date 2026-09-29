@@ -13,7 +13,8 @@ import { planWallPanels, WINDOW_CUTOUT_WIDTH, WINDOW_CUTOUT_HEIGHT } from "./wal
 import { claddingNormalAsset, createCladdingMaterial } from "./cladding-material.js";
 import { createDrainpipeDetail, drainpipeCenterClear } from "./drainpipe-detail.js";
 import { createZhenfuAnnex, createZhenfuHall, isZhenfuAnnex, isZhenfuHall } from "./temple.js";
-import { civicSpecFor, createCivicHall, createWorshipHall, worshipSpecFor } from "./worship.js";
+import { civicSpecFor, createCivicHall, createMarketHall, createWorshipHall, marketSpecFor, worshipSpecFor } from "./worship.js";
+import { integrateOsmPlaceClasses } from "./lots.js";
 import { applyFacadeMode, facadeAtlasMaterial, normalizeFacadeMode, resolveFacade25d } from "./facade-atlas-25d.js";
 import {
   makeStorefrontTexture,
@@ -31,6 +32,7 @@ import {
   paletteColor,
   classifyFacade,
   hash01,
+  makeMassingTexture,
 } from "./textures.js";
 
 export function localRing(ring, project) {
@@ -43,15 +45,22 @@ export function localRing(ring, project) {
 export function resolveBuildingProfile(b, extra = {}, isShop = false) {
   const height = displayHeightForLot(b, isShop, extra);
   const name = extra.label || b.name || "";
+  const building = String(b.building || "");
+  const amenity = String(b.tags?.amenity || "");
   const kind = isShop
     ? "shop"
-    : b.building === "temple" || /宮|殿|蓮社/.test(name)
+    : building === "temple" || building === "religious" || amenity === "place_of_worship" || /宮|殿|蓮社|祠/.test(name)
       ? "temple"
-      : /市場/.test(name)
+      : /市場/.test(name) || amenity === "marketplace"
         ? "market"
-        : b.building === "government" || /派出所|活動中心/.test(name)
+        : building === "government" || building === "civic" || building === "public"
+          || amenity === "community_centre" || /派出所|活動中心|集會所/.test(name)
           ? "civic"
-          : "house";
+          : building === "apartments" || building === "residential"
+            ? "apartment"
+            : building === "commercial" || building === "retail"
+              ? "commercial"
+              : "house";
   const storey = height >= 8 ? 3.28 : Math.min(3.12, Math.max(2.55, height * 0.48));
   const upperH = Math.max(height - storey, 0.35);
   const upperFloors = Math.max(1, Math.round(upperH / 3.15));
@@ -481,10 +490,11 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
   const r2 = (radius + 35) ** 2;
   const buildingEdits = edits?.buildings || {};
   const buildings = lotData?.buildings?.length ? lotData.buildings : osm.buildings || [];
+  const placeClasses = integrateOsmPlaceClasses(buildings, osm?.buildings || [], project);
   const shopId = lotData?.shopId || buildings.find((b) => b.isShop)?.id || null;
   const sampler = createAerialColorSampler(aerialTex, frame.uvAt);
   const plinthMat = new THREE.MeshLambertMaterial({ color: 0x6a645c });
-  const facadeStats = { unique: new Set(), styles: {}, metalCaps: 0, arcades: 0, branded: 0, fascia: 0 };
+  const facadeStats = { unique: new Set(), styles: {}, metalCaps: 0, arcades: 0, branded: 0, fascia: 0, placeClasses };
   const facadeDepth = createFacadeDepth();
   const brandViews = [];
 
@@ -574,7 +584,12 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
     });
     const color = extra.color || facade.wallHex || profile.color;
     const seed = facade.layout;
-    const floors = splitShopFloors(matched.byLot.get(b.id) || []);
+    const foreignInstitution = (shop) => shop
+      && ["temple", "civic", "market", "police"].includes(shop.kind)
+      && shop.name !== b.name;
+    const floors = splitShopFloors(
+      (matched.byLot.get(b.id) || []).filter((shop) => !foreignInstitution(shop))
+    );
     const groundShop = floors.ground;
     const upperShop = floors.upper;
     const neighbor = neighborById.get(b.id) || null;
@@ -622,6 +637,27 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
           });
           if (/活動中心/.test(civic.name)) landmarkViews.activity = built.view;
           else if (/集會所/.test(civic.name)) landmarkViews.assembly = built.view;
+          continue;
+        }
+      }
+      const market = marketSpecFor(b);
+      if (market) {
+        const built = createMarketHall(pts, roads, market);
+        if (built) {
+          group.add(built.group);
+          colliders.push({
+            ...built.collider,
+            observedFloors: null,
+            heightIsEstimated: true,
+            modelRole: "market",
+            plaque: market.name,
+            shops: [market.name],
+            normalMapped: false,
+            detailedDrainpipe: false,
+            recessedWindows: 0,
+            projectionOmissions: 0,
+          });
+          if (market.name === "朝陽市場") landmarkViews.market = built.view;
           continue;
         }
       }
@@ -680,6 +716,8 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
       facadeStats.near50RecessedBuildings += 1;
     }
     const plainNearUpper = lot.nearDetail && physicalOpenings > 0;
+    const massing = !isShop && !neighbor && !landmark && !groundShop && !upperShop
+      && (kind === "apartment" || kind === "commercial");
     const bay = isShop
       ? 5.4
       : kind === "market"
@@ -791,6 +829,8 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
         facadeStats.branded += 1;
       } else if (groundShop?.name) {
         storeMap = makeNamedStorefrontTexture(groundShop.name, groundShop.color || color, seed, groundShop.kind);
+      } else if (massing) {
+        storeMap = makeMassingTexture(kind);
       } else {
         storeMap = makeStorefrontTexture(color, seed, kind, facade.style);
       }
@@ -828,7 +868,9 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
         }
       }
       if (upperGeo || frontUpperGeo || extraUpperGeo) {
-        const upperMap = lot.nearDetail
+        const upperMap = massing
+          ? makeMassingTexture(kind)
+          : lot.nearDetail
           ? makeUpperFloorTexture(color, seed, kind, facade.style, false)
           : upperShop?.brand === "yangxin"
           ? makeYangxinUpperTexture()
@@ -842,7 +884,9 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
         addShell(upperGeo, sideUpperMat, sideUpperData, false);
         addShell(extraUpperGeo, sideUpperMat, { ...sideUpperData }, true);
         if (frontUpperGeo) {
-          const frontMap = upperShop?.brand === "yangxin"
+          const frontMap = massing
+            ? makeMassingTexture(kind)
+            : upperShop?.brand === "yangxin"
             ? makeYangxinUpperTexture()
             : makeUpperFloorTexture(color, seed, kind, facade.style, !plainNearUpper);
           const frontUpperMat = lot.nearDetail && plainNearUpper
@@ -859,7 +903,8 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
           facadeAtlasMaterial(atlasRecipe.kind, atlasRecipe.floors, atlasRecipe.variant, {
             // A physical fascia already names this frontage. Skip the painted
             // sign band so the atlas and the extruded board are not both signs.
-            paintedSign: !(groundShop || upperShop),
+            // Apartment and commercial massing also stay nameless.
+            paintedSign: !(groundShop || upperShop || massing),
           })
         );
         atlasMesh.name = "facade-atlas-25d";
@@ -869,7 +914,7 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
           facadeLayer: "atlas25d",
           nearDetail: lot.nearDetail,
           recipe: atlasRecipe.key,
-          paintedSign: !(groundShop || upperShop),
+          paintedSign: !(groundShop || upperShop || massing),
           recipeKind: atlasRecipe.kind,
           recipeLabel: atlasRecipe.label,
           floors: atlasRecipe.floors,
@@ -889,17 +934,17 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
     } else if (lot.nearDetail && (b.area || 120) > 70) {
       facadeStats.near50RoofEquipmentOmitted += 1;
     }
-    if (!neighbor && !landmark && !shouldSkipHouseAwning(isShop, groundShop)) {
+    if (!massing && !neighbor && !landmark && !shouldSkipHouseAwning(isShop, groundShop)) {
       projectionOmissions += addAwnings(group, pts, roads, 0xb08968,
         lot.nearDetail ? { lots, id: lot.id } : null);
     }
     const projectionEdge = lot.nearDetail ? streetFacingEdge(pts, roads) : null;
     const projectionClear = !lot.nearDetail || exteriorStripClear(projectionEdge, lots, lot.id, 1.65);
-    if (!neighbor && !landmark && facade.arcade && !shouldSkipArcade(isShop, groundShop)) {
+    if (!massing && !neighbor && !landmark && facade.arcade && !shouldSkipArcade(isShop, groundShop)) {
       if (projectionClear) addArcade(group, pts, roads, storey);
       else projectionOmissions += 1;
     }
-    if (!neighbor && facade.balcony && !groundShop) {
+    if (!massing && !neighbor && facade.balcony && !groundShop) {
       if (projectionClear) addBalcony(group, pts, roads, storey, seed);
       else projectionOmissions += 1;
     }
@@ -971,7 +1016,7 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
       observedFloors: localFloorEvidence?.floors ?? null,
       floorEvidence: localFloorEvidence?.source ?? null,
       heightIsEstimated: true,
-      modelRole: isShop ? "shop" : neighbor ? "neighbor" : landmark ? "landmark" : "generic",
+      modelRole: isShop ? "shop" : neighbor ? "neighbor" : landmark ? "landmark" : massing ? kind : "generic",
       normalMapped,
       detailedDrainpipe,
       recessedWindows,

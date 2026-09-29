@@ -20,17 +20,25 @@
     <div class="actions">
       <button id="focusBtn" type="button">查看46號</button>
       <button id="near50Btn" type="button" aria-controls="near50Panel" aria-expanded="false">50公尺逐棟</button>
-      <button id="orbitBtn" type="button">環景檢視</button>
-      <button id="walkBtn" type="button">第一視角</button>
+      <button id="skyBtn" type="button" class="is-on" aria-pressed="true">天空俯瞰</button>
+      <button id="walkBtn" type="button" aria-pressed="false">第一視角</button>
       <button id="lockBtn" type="button" hidden aria-pressed="false">鎖定滑鼠</button>
     </div>
+    <nav class="place-nav" aria-label="前往其他心田">
+      <a href="/xintian/house/">回家</a>
+      <a href="/xintian/">回心田</a>
+      <a href="/xintian/explore/">門前探索</a>
+      <a href="/xintian/stage/">立體舞台</a>
+      <a href="/xintian/parcel/" title="此頁目前為施工中">拓荒（施工中）</a>
+      <a href="/xintian/visit/">參觀心田</a>
+    </nav>
     <div class="facade-modes" role="group" aria-label="立面樣式">
       <button id="facadeRealisticBtn" type="button" aria-pressed="false">寫實立面</button>
       <button id="facadeMixedBtn" type="button" class="is-on" aria-pressed="true">混合</button>
       <button id="facade25dBtn" type="button" aria-pressed="false">2.5D 招牌樓</button>
     </div>
     <p class="muted" id="facadeNote">混合：50 公尺內維持現有立面，較遠街面為程序化 2.5D 招牌樓（示意窗格與招牌帶，不是實景）。</p>
-    <p class="muted" id="hint">拖曳旋轉、滾輪縮放。點「第一視角」可在平地移動、跳躍，撞到房子會被擋住。</p>
+    <p class="muted" id="hint">預設天空俯瞰：拖曳平移、滾輪縮放。點「第一視角」可在平地移動、跳躍，撞到房子會被擋住。網址可加 ?view=walk 或 ?view=sky。</p>
   </aside>
   <aside id="near50Panel" class="near50-panel" aria-labelledby="near50Title" hidden>
     <div class="near50-head">

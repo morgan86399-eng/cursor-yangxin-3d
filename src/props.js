@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { nearestRoad, pointInRing } from "./geo.js";
 import { localRing } from "./buildings.js";
+import { isDetailedPark } from "./open-space.js";
 import { hitsCollider } from "./player.js";
 import { hash01 } from "./textures.js";
 import { roadWidth } from "./roads.js";
@@ -254,8 +255,8 @@ export function createStreetProps(osm, config, project, colliders, roads) {
   }
 
   for (const green of osm.greens || []) {
-    // 朝陽公園改由 open-space 畫草坪、步道與樹，避免再撒一層隨機樹。
-    if (/朝陽/.test(green.name || "") && green.kind === "park") continue;
+    // 公園改由 open-space 畫草坪、步道與樹，避免再撒一層隨機樹。
+    if (isDetailedPark(green)) continue;
     const pts = localRing(green.ring, project);
     if (pts.length < 4) continue;
     const minX = Math.min(...pts.map((p) => p.x));

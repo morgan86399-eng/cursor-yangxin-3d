@@ -170,6 +170,17 @@ export function classifyFacade(b, extra = {}) {
   if (kind === "market") {
     return { style: "tile", wallHex: extra.color || "#cbb79a", layout, metalCap: false, arcade: false, balcony: false, roof };
   }
+  if (kind === "apartment" || kind === "commercial") {
+    return {
+      style: kind === "commercial" ? "tile" : "concrete",
+      wallHex: extra.color || (kind === "commercial" ? "#cbb79a" : "#d7d2c8"),
+      layout,
+      metalCap: false,
+      arcade: false,
+      balcony: false,
+      roof,
+    };
+  }
   if (isShop) {
     return { style: "arcade", wallHex: extra.color || "#d4a574", layout: 1, metalCap: false, arcade: true, balcony: false, roof };
   }
@@ -632,6 +643,11 @@ export function makePavementDetail() {
     tex.generateMipmaps = true;
     return tex;
   });
+}
+
+export function makeMassingTexture(kind = "apartment") {
+  if (kind === "commercial") return makeUpperFloorTexture("#cbb79a", 6, "house", "tile", true);
+  return makeUpperFloorTexture("#d7d2c8", 4, "house", "concrete", true);
 }
 
 export function makeUpperFloorTexture(hex, seed = 0, kind = "house", style = "paint", drawOpenings = true) {

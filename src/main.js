@@ -14,12 +14,13 @@ import { createCourtyardFarm } from "./farm.js";
 import { createNear50Inventory, near50CameraPose } from "./near50-inventory.js";
 import { applyFacadeMode, normalizeFacadeMode } from "./facade-atlas-25d.js";
 import { createOpenSpace } from "./open-space.js";
+import { createWaysideShrines } from "./worship.js";
 
 const statusEl = document.getElementById("status");
 const addressEl = document.getElementById("address");
 const metaEl = document.getElementById("meta");
 const creditEl = document.getElementById("credit");
-const orbitBtn = document.getElementById("orbitBtn");
+const skyBtn = document.getElementById("skyBtn");
 const focusBtn = document.getElementById("focusBtn");
 const near50Btn = document.getElementById("near50Btn");
 const near50Panel = document.getElementById("near50Panel");
@@ -138,6 +139,13 @@ async function boot() {
   const openSpace = createOpenSpace(osm, parkingData.lots || [], project, config.radiusMeters, world.colliders);
   scene.add(openSpace.group);
   Object.assign(world.landmarkViews, openSpace.views);
+  const shrines = createWaysideShrines(osm.pois || [], project, world.colliders);
+  if (shrines.count) {
+    scene.add(shrines.group);
+    world.colliders.push(...shrines.colliders);
+    const shrineView = shrines.views["地基主祠"];
+    if (shrineView) world.landmarkViews.shrine = shrineView;
+  }
   const near50Inventory = createNear50Inventory(lotData.buildings || osm.buildings, world.colliders, project);
   if (initialView === "near50") {
     metaEl.textContent = `${config.label} · 50 公尺逐棟檢視 ${world.facadeStats.near50Footprints} 筆建物輪廓 · 背景地圖仍涵蓋 ${config.radiusMeters} 公尺`;
@@ -156,14 +164,18 @@ async function boot() {
     colliders: world.colliders,
     roads: network.roads,
     onMode(mode) {
-      orbitBtn.classList.toggle("is-on", mode === "orbit");
+      skyBtn.classList.toggle("is-on", mode === "sky");
+      skyBtn?.setAttribute("aria-pressed", String(mode === "sky"));
       walkBtn.classList.toggle("is-on", mode === "walk");
+      walkBtn?.setAttribute("aria-pressed", String(mode === "walk"));
       lockBtn.hidden = mode !== "walk";
       crosshairEl?.classList.toggle("is-on", mode === "walk");
       hintEl.textContent =
         mode === "walk"
           ? "WASD 移動、空白鍵跳躍、Shift 跑步；拖曳畫面轉頭。需要連續轉頭時，可自行鎖定滑鼠，按 Esc 釋放。"
-          : "拖曳旋轉、滾輪縮放。點「第一視角」在平地移動、跳躍。";
+          : mode === "sky"
+            ? "天空俯瞰：拖曳平移、滾輪縮放。點「第一視角」走到街上。"
+            : "可改「天空俯瞰」或「第一視角」。";
     },
     onLock(locked) {
       lockBtn.textContent = locked ? "按 Esc 解鎖" : "鎖定滑鼠";
@@ -171,7 +183,7 @@ async function boot() {
       lockHintEl?.classList.toggle("is-on", controls.getMode() === "walk" && !locked);
     },
   });
-  orbitBtn.classList.add("is-on");
+  skyBtn?.classList.add("is-on");
   const modeledNear50 = near50Inventory.filter((item) => item.modeled).length;
   const floorObservedNear50 = near50Inventory.filter((item) => item.observedFloors != null).length;
   const genericNear50 = near50Inventory.filter((item) => item.modelRole === "generic").length;
@@ -190,7 +202,17 @@ async function boot() {
     const title = document.createElement("strong");
     title.textContent = `${String(index + 1).padStart(2, "0")} · ${item.label}`;
     const detail = document.createElement("span");
-    const roleLabels = { shop: "店面個別建模", neighbor: "鄰房個別建模", temple: "寺廟個別建模", landmark: "地標個別建模", civic: "公共建築個別建模", generic: "通用推估外觀" };
+    const roleLabels = {
+      shop: "店面個別建模",
+      neighbor: "鄰房個別建模",
+      temple: "寺廟個別建模",
+      landmark: "地標個別建模",
+      civic: "公共建築個別建模",
+      market: "市場個別建模",
+      apartment: "集合住宅量體",
+      commercial: "商業量體",
+      generic: "通用推估外觀",
+    };
     detail.textContent = `距中心 ${item.distance.toFixed(1)}m · ${item.height == null ? "模型未載入" : `${item.height.toFixed(1)}m 高度推估`}${item.observedFloors ? ` · ${item.observedFloors} 層目視` : ""} · ${roleLabels[item.modelRole] || "外觀類型待查"}`;
     if (item.recessedWindows) detail.textContent += ` · ${item.recessedWindows} 處立體窗洞（窗位推估）`;
     if (item.normalMapped) detail.textContent += " · 牆面凹凸光影（材質樣式推估）";
@@ -216,13 +238,11 @@ async function boot() {
     const item = near50Inventory.find((entry) => entry.id === id);
     const pose = near50CameraPose(item, network.roads, world.colliders);
     if (!pose) return false;
-    controls.setMode("orbit");
-    camera.fov = 65;
-    camera.updateProjectionMatrix();
-    camera.position.set(pose.x, pose.y, pose.z);
-    controls.orbit.target.set(pose.lookX, pose.lookY, pose.lookZ);
-    controls.orbit.minDistance = 2.2;
-    controls.orbit.update();
+    controls.setMode("sky", {
+      x: (pose.x + pose.lookX) / 2,
+      z: (pose.z + pose.lookZ) / 2,
+      height: Math.max(36, Math.abs(pose.y) + 24),
+    });
     if (selectedNear50Outline) {
       scene.remove(selectedNear50Outline);
       selectedNear50Outline.geometry.dispose();
@@ -270,20 +290,13 @@ async function boot() {
   canvas.addEventListener("pointerleave", () => { lookDrag = null; });
   window.addEventListener("blur", () => { lookDrag = null; });
 
-  const view = initialView;
-  if (view === "top") {
-    camera.position.set(0, 220, 0.01);
-    controls.orbit.target.set(0, 0, 0);
-    controls.orbit.update();
+  const view = initialView === "orbit" ? "sky" : initialView;
+  if (view === "top" || view === "sky") {
+    controls.setMode("sky", { x: 0, z: 0, height: view === "top" ? 220 : 180 });
   } else if (view === "mid") {
-    camera.position.set(8, 92, 14);
-    controls.orbit.target.set(0, 0, 0);
-    controls.orbit.update();
+    controls.pose(8, 92, 14, 0, 0, 0, 65);
   } else if (view === "near50") {
-    camera.position.set(13, 57, 31);
-    controls.orbit.target.set(0, 4, 0);
-    controls.orbit.minDistance = 2.2;
-    controls.orbit.update();
+    controls.setMode("sky", { x: 0, z: 0, height: 90 });
   } else if (view === "walk") {
     controls.setMode("walk");
   } else if (view === "facade") {
@@ -323,106 +336,92 @@ async function boot() {
       if (!best || score > best.score) best = { score, mx, mz, nx, nz, y: Math.max(4.2, Math.min(Math.max(ay, cy) * 0.45, 8)) };
     });
     if (best) {
-      camera.fov = 50;
-      camera.updateProjectionMatrix();
-      camera.position.set(best.mx + best.nx * 18, best.y, best.mz + best.nz * 18);
-      controls.orbit.target.set(best.mx, best.y * 0.55, best.mz);
-      controls.orbit.minDistance = 1.2;
-      controls.orbit.update();
+      controls.pose(best.mx + best.nx * 18, best.y, best.mz + best.nz * 18, best.mx, best.y * 0.55, best.mz, 50);
     }
   } else if (view === "farm" && world.zhenfu) {
     const t = world.zhenfu;
     const depth = Math.min((t.courtDepth || 12) - 3.4, 9.4);
     const lookX = t.midX + t.outX * depth + t.rightX * 0.4;
     const lookZ = t.midZ + t.outZ * depth + t.rightZ * 0.4;
-    controls.setMode("orbit");
-    camera.fov = 42;
-    camera.updateProjectionMatrix();
-    camera.position.set(
+    controls.pose(
       lookX + t.outX * 4.6 + t.rightX * 1.7,
       2.15,
       lookZ + t.outZ * 4.6 + t.rightZ * 1.7,
+      lookX,
+      0.72,
+      lookZ,
+      42,
     );
-    controls.orbit.target.set(lookX, 0.72, lookZ);
-    controls.orbit.minDistance = 1.2;
-    controls.orbit.update();
   } else if ((view === "zhenfu" || view === "zhenfu3q") && world.zhenfu) {
     const cam = view === "zhenfu3q" ? world.zhenfu.threeQuarter : world.zhenfu.front;
-    camera.position.set(cam.x, cam.y, cam.z);
-    controls.orbit.target.set(world.zhenfu.lookX, world.zhenfu.lookY, world.zhenfu.lookZ);
-    controls.orbit.update();
+    controls.pose(cam.x, cam.y, cam.z, world.zhenfu.lookX, world.zhenfu.lookY, world.zhenfu.lookZ);
   } else if (view === "corner" && world.landmarkViews?.corner) {
     const cam = world.landmarkViews.corner;
-    camera.position.set(cam.x, cam.y, cam.z);
-    controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
-    controls.orbit.minDistance = 2.2;
-    controls.orbit.update();
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
   } else if (view === "station" && world.landmarkViews?.station) {
     const cam = world.landmarkViews.station;
-    camera.position.set(cam.x, cam.y, cam.z);
-    controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
-    controls.orbit.minDistance = 2.2;
-    controls.orbit.update();
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
   } else if ((view === "chaoyang" || view === "chaoyang-temple") && world.landmarkViews?.chaoyang) {
     const cam = world.landmarkViews.chaoyang;
-    camera.position.set(cam.x, cam.y, cam.z);
-    controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
-    controls.orbit.minDistance = 2.2;
-    controls.orbit.update();
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
   } else if ((view === "park" || view === "chaoyang-park") && world.landmarkViews?.park) {
     const cam = world.landmarkViews.park;
-    camera.position.set(cam.x, cam.y, cam.z);
-    controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
-    controls.orbit.minDistance = 2.2;
-    controls.orbit.update();
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
   } else if ((view === "parking" || view === "chaoyang-parking") && world.landmarkViews?.parking) {
     const cam = world.landmarkViews.parking;
-    camera.position.set(cam.x, cam.y, cam.z);
-    controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
-    controls.orbit.minDistance = 2.2;
-    controls.orbit.update();
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+  } else if ((view === "market" || view === "chaoyang-market") && world.landmarkViews?.market) {
+    const cam = world.landmarkViews.market;
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+  } else if ((view === "activity" || view === "civic") && world.landmarkViews?.activity) {
+    const cam = world.landmarkViews.activity;
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+  } else if (view === "shrine" && world.landmarkViews?.shrine) {
+    const cam = world.landmarkViews.shrine;
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
   } else if (view === "yashan" || view === "yashan-close") {
     const spot = (world.brandViews || []).find((item) => item.brand === "yashanyuan") || world.brandViews?.[0];
     if (spot) {
       const dx = spot.x - spot.lookX;
       const dz = spot.z - spot.lookZ;
       const k = view === "yashan-close" ? 0.5 : 1;
-      camera.position.set(spot.lookX + dx * k, view === "yashan-close" ? 4.8 : spot.y || 6.4, spot.lookZ + dz * k);
-      controls.orbit.target.set(spot.lookX, view === "yashan-close" ? 3.5 : spot.lookY || 4.5, spot.lookZ);
-      controls.orbit.minDistance = 2.2;
-      controls.orbit.update();
+      const y = view === "yashan-close" ? 4.8 : spot.y || 6.4;
+      const lookY = view === "yashan-close" ? 3.5 : spot.lookY || 4.5;
+      controls.pose(spot.lookX + dx * k, y, spot.lookZ + dz * k, spot.lookX, lookY, spot.lookZ, 60);
     }
   } else {
-    controls.setMode("walk");
+    controls.setMode("sky", { x: 0, z: 0, height: 180 });
   }
 
   function frameNo46(mode = "normal") {
     const spot = (world.brandViews || []).find((item) => item.brand === "yashanyuan");
     if (!spot) return false;
-    controls.setMode("orbit");
+    if (mode === "normal") {
+      controls.setMode("sky", { x: spot.lookX, z: spot.lookZ, height: 48 });
+      return true;
+    }
     const dx = spot.x - spot.lookX;
     const dz = spot.z - spot.lookZ;
     const close = mode === "close";
     const k = close ? 0.62 : mode === "neighbors" ? 1.15 : 1.4;
-    camera.fov = close ? 65 : 60;
-    camera.updateProjectionMatrix();
-    camera.position.set(spot.lookX + dx * k, close ? 4.8 : 6.25, spot.lookZ + dz * k);
-    controls.orbit.target.set(spot.lookX, close ? 3.5 : 5.7, spot.lookZ);
-    controls.orbit.minDistance = 2.2;
-    controls.orbit.update();
+    controls.pose(
+      spot.lookX + dx * k,
+      close ? 4.8 : 6.25,
+      spot.lookZ + dz * k,
+      spot.lookX,
+      close ? 3.5 : 5.7,
+      spot.lookZ,
+      close ? 65 : 60,
+    );
     return true;
   }
 
   focusBtn.addEventListener("click", () => {
     if (frameNo46()) setStatus("鎮撫街46號：1樓雅善圓、2樓桃園養心推拿");
   });
-  orbitBtn.addEventListener("click", () => {
-    if (controls.getMode() !== "orbit") controls.setMode("orbit");
-    camera.fov = 65;
-    camera.updateProjectionMatrix();
-    camera.position.set(42, 38, 54);
-    controls.orbit.target.set(0, 2, 0);
-    controls.orbit.update();
+  skyBtn.addEventListener("click", () => {
+    controls.setMode("sky", { x: 0, z: 0, height: 180 });
+    setStatus("天空俯瞰：拖曳平移、滾輪縮放");
   });
   walkBtn.addEventListener("click", () => {
     setStatus("第一視角：WASD 移動、空白鍵跳躍。撞到建物會停住");
@@ -555,22 +554,17 @@ async function boot() {
       const t = world.zhenfu;
       if (!t) return false;
       const cam = mode === "three" ? t.threeQuarter : t.front;
-      camera.position.set(cam.x, cam.y, cam.z);
-      controls.orbit.target.set(t.lookX, t.lookY, t.lookZ);
-      controls.orbit.update();
+      controls.pose(cam.x, cam.y, cam.z, t.lookX, t.lookY, t.lookZ);
       return true;
+    },
+    getView() {
+      return controls.getCameraPose();
     },
     frameYashan(mode) {
       return frameNo46(mode);
     },
     framePoint(x, y, z, lookX, lookY, lookZ) {
-      controls.setMode("orbit");
-      camera.fov = 50;
-      camera.updateProjectionMatrix();
-      camera.position.set(x, y, z);
-      controls.orbit.target.set(lookX, lookY, lookZ);
-      controls.orbit.minDistance = 1.2;
-      controls.orbit.update();
+      controls.pose(x, y, z, lookX, lookY, lookZ, 50);
     },
     buildingRoot: world.group,
     shopList: shops.map((s) => {
@@ -602,6 +596,11 @@ async function boot() {
     "chaoyang-park": "朝陽公園",
     parking: "朝陽公園停車場",
     "chaoyang-parking": "朝陽公園停車場",
+    market: "朝陽市場",
+    "chaoyang-market": "朝陽市場",
+    activity: "北門、朝陽二里聯合活動中心",
+    civic: "北門、朝陽二里聯合活動中心",
+    shrine: "地基主祠",
   };
   if (!(initialBuildingId && focusNear50Building(initialBuildingId))) {
     const framed = viewLabels[initialView];

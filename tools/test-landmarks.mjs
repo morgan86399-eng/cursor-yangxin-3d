@@ -2,15 +2,19 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createProjector } from "../src/geo.js";
+import { createProjector, distanceToRing } from "../src/geo.js";
 import { hitsCollider } from "../src/player.js";
 import { createOpenSpace } from "../src/open-space.js";
-import { isZhenfuHall } from "../src/temple.js";
+import { integrateOsmPlaceClasses } from "../src/lots.js";
+import { isZhenfuAnnex, isZhenfuHall } from "../src/temple.js";
 import {
   civicSpecFor,
   createCivicHall,
+  createMarketHall,
+  createWaysideShrines,
   createWorshipHall,
   inspectLandmarkGroup,
+  marketSpecFor,
   worshipSpecFor,
 } from "../src/worship.js";
 
@@ -97,6 +101,63 @@ assert.ok(paths >= 1, "park paths missing");
 assert.equal(stallMeshes, 1);
 assert.ok(space.views.park && space.views.parking);
 assert.ok(Number.isFinite(hall.view.x) && Number.isFinite(space.views.park.lookX));
+
+const marketSpec = marketSpecFor(byName("朝陽市場"));
+assert.equal(marketSpec?.name, "朝陽市場");
+assert.ok(marketSpec.height >= 9);
+const marketHall = createMarketHall(toPts(byName("朝陽市場").ring), roads, marketSpec);
+assert.equal(marketHall.group.name, "market-hall");
+assert.equal(inspectLandmarkGroup(marketHall.group).plaqueText, "朝陽市場");
+assert.equal(inspectLandmarkGroup(marketHall.group).roofs, 0, "a market is not a temple roof");
+assert.ok(marketHall.collider.height > 8);
+let marketRoofMat = null;
+let civicRoofMat = null;
+marketHall.group.traverse((obj) => { if (obj.name === "market-roof") marketRoofMat = obj.material.uuid; });
+civic.group.traverse((obj) => { if (obj.name === "civic-roof") civicRoofMat = obj.material.uuid; });
+assert.equal(marketRoofMat, civicRoofMat, "market and civic roofs share one material");
+
+const lots = JSON.parse(await readFile(join(root, "../public/data/buildings-nlsc.json"), "utf8"));
+const integrated = integrateOsmPlaceClasses(lots.buildings.map((b) => ({ ...b, tags: { ...(b.tags || {}) } })), osm.buildings, project);
+const apartments = integrated.stamped.filter((row) => row.building === "apartments");
+assert.ok(apartments.length >= 15, `apartment footprints ${apartments.length}`);
+assert.ok(integrated.added.some((row) => row.building === "commercial"), "uncovered commercial shells should be added");
+assert.equal(integrated.stamped.find((row) => row.id === "nlsc/343")?.building, "religious");
+assert.equal(isZhenfuAnnex({ id: "nlsc/343" }), true);
+const shop46 = lots.buildings.find((b) => b.id === "nlsc/414");
+assert.equal(shop46?.isShop, true);
+assert.equal(integrated.stamped.some((row) => row.id === "nlsc/414"), false, "46號 stays the shop lot");
+for (const row of integrated.added) {
+  const building = osm.buildings.find((b) => b.id === row.id);
+  const pts = toPts(building.ring);
+  assert.ok(distanceToRing(0, 0, pts) > 50, `${row.id} must stay outside the 50m inspector`);
+}
+
+const worshipColliders = osm.buildings
+  .filter((b) => b.name && (b.building === "temple" || b.tags?.amenity === "place_of_worship"))
+  .map((b) => ({ plaque: b.name, shops: [b.name], points: toPts(b.ring) }));
+const shrines = createWaysideShrines(osm.pois, project, worshipColliders);
+assert.equal(shrines.count, 1);
+assert.equal(shrines.colliders[0].plaque, "地基主祠");
+assert.equal(shrines.colliders[0].modelRole, "temple");
+let shrineGold = null;
+let templeGold = null;
+shrines.group.traverse((obj) => { if (obj.name === "shrine-roof") shrineGold = obj.material.uuid; });
+hall.group.traverse((obj) => { if (obj.material?.color?.getHex?.() === 0xe2b43a) templeGold = obj.material.uuid; });
+assert.ok(shrineGold && templeGold && shrineGold === templeGold, "shrine roof reuses the temple gold material");
+
+const html = await readFile(join(root, "../index.html"), "utf8");
+assert.match(html, /id="skyBtn"/);
+assert.match(html, /天空俯瞰/);
+assert.doesNotMatch(html, /環景檢視|id="orbitBtn"/);
+assert.match(html, /href="\/xintian\/house\/"/);
+assert.match(html, /href="\/xintian\/"/);
+assert.match(html, /href="\/xintian\/explore\/"/);
+assert.match(html, /href="\/xintian\/stage\/"/);
+assert.match(html, /href="\/xintian\/parcel\/"/);
+assert.match(html, /拓荒（施工中）/);
+assert.match(html, /href="\/xintian\/visit\/"/);
+const css = await readFile(join(root, "../src/style.css"), "utf8");
+assert.match(css, /\.place-nav a[\s\S]*min-height:\s*44px/);
 
 console.log("chaoyang landmarks ok", {
   templeHeight: Number(hall.collider.height.toFixed(2)),

@@ -34,7 +34,27 @@ body {
 .hud p { margin: 0.2rem 0; line-height: 1.45; }
 .hud .muted { color: #d9cbb6; font-size: 0.88rem; }
 
-.actions, .facade-modes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.actions, .facade-modes, .place-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.place-nav { margin-top: 8px; }
+.place-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 234, 214, 0.28);
+  color: var(--paper);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.06);
+  line-height: 1.2;
+}
+.place-nav a:hover, .place-nav a:focus-visible {
+  background: var(--accent);
+  border-color: transparent;
+  color: #1c120a;
+}
 .facade-modes { margin-top: 8px; }
 .actions button[hidden] { display: none; }
 button {

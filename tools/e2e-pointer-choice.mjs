@@ -44,8 +44,8 @@ try {
   await page.waitForFunction(() => !document.pointerLockElement, { timeout: 5000 });
   assert.equal(await page.evaluate(() => window.__yangxin.getState().mode), "walk", "Escape releases pointer without leaving walk mode");
   assert.equal(await page.$eval("#lockBtn", (el) => el.getAttribute("aria-pressed")), "false");
-  await page.click("#orbitBtn");
-  assert.equal(await page.evaluate(() => window.__yangxin.getState().mode), "orbit");
+  await page.click("#skyBtn");
+  assert.equal(await page.evaluate(() => window.__yangxin.getState().mode), "sky");
   assert.equal(await page.$eval("#lockBtn", (el) => el.hidden), true);
   await page.click("#walkBtn");
   await page.mouse.move(700, 450);
@@ -68,7 +68,7 @@ try {
   });
   assert.ok(mobileAfter.worldUpY > 0.2, `1px mobile drag flipped the view: ${JSON.stringify(mobileAfter)}`);
   assert.ok(Math.abs(mobileAfter.forwardY - mobileBefore.forwardY) < 0.03, "1px mobile drag changed pitch too much");
-  console.log("pointer lock choice ok: desktop/mobile drags remain upright, movement, explicit lock, Escape release, orbit", { lookBeforeDrag, lookAfterDrag, mobileBefore, mobileAfter });
+  console.log("pointer lock choice ok: desktop/mobile drags remain upright, movement, explicit lock, Escape release, sky", { lookBeforeDrag, lookAfterDrag, mobileBefore, mobileAfter });
 } finally {
   await browser.close();
 }

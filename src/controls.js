@@ -24,18 +24,20 @@ export function createControls(
   const orbit = new OrbitControls(camera, renderer.domElement);
   orbit.enableDamping = true;
   orbit.dampingFactor = 0.06;
-  orbit.maxPolarAngle = Math.PI * 0.49;
-  orbit.minDistance = 4;
-  orbit.maxDistance = radius * 1.85;
-  orbit.target.set(0, 2, 0);
-  camera.position.set(42, 38, 54);
+  orbit.enableRotate = false;
+  orbit.minPolarAngle = 0;
+  orbit.maxPolarAngle = 0.08;
+  orbit.minDistance = 30;
+  orbit.maxDistance = Math.max(radius * 2.2, 420);
+  orbit.target.set(0, 0, 0);
+  camera.position.set(0, 180, 8);
   orbit.update();
 
   const look = new PointerLockControls(camera, renderer.domElement);
   look.minPolarAngle = 0.18;
   look.maxPolarAngle = Math.PI - 0.18;
   const keys = { w: false, a: false, s: false, d: false, shift: false, jump: false };
-  let mode = "orbit";
+  let mode = "sky";
   let player = createPlayerState(0, 16, { eyeHeight: eyeHeight || PLAYER.eyeHeight });
   const lookDir = new THREE.Vector3();
   const rightDir = new THREE.Vector3();
@@ -65,7 +67,39 @@ export function createControls(
     camera.position.set(player.x, player.y + player.eyeHeight + player.bob, player.z);
   }
 
-  function setMode(next) {
+  function applySky(cx, cz, height) {
+    const h = Number.isFinite(height) ? height : 180;
+    orbit.enabled = true;
+    orbit.enableRotate = false;
+    orbit.enablePan = true;
+    orbit.enableZoom = true;
+    orbit.minPolarAngle = 0;
+    orbit.maxPolarAngle = 0.08;
+    orbit.minDistance = 30;
+    orbit.maxDistance = Math.max(radius * 2.2, 420);
+    orbit.target.set(cx, 0, cz);
+    camera.up.set(0, 1, 0);
+    camera.position.set(cx, h, cz + Math.min(8, h * 0.04));
+    camera.lookAt(cx, 0, cz);
+    orbit.update();
+  }
+
+  function pose(x, y, z, lookX, lookY, lookZ, fov) {
+    if (look.isLocked) look.unlock();
+    mode = "pose";
+    orbit.enabled = false;
+    camera.up.set(0, 1, 0);
+    if (Number.isFinite(fov)) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+    camera.position.set(x, y, z);
+    camera.lookAt(lookX, lookY, lookZ);
+    onMode?.("pose");
+    onLock?.(false);
+  }
+
+  function setMode(next, focus) {
     if (next === "walk") {
       if (mode !== "walk") {
         orbit.enabled = false;
@@ -79,16 +113,15 @@ export function createControls(
       onLock?.(look.isLocked);
       return;
     }
-    if (mode === "orbit") return;
-    mode = "orbit";
+    if (next !== "sky") return;
     if (look.isLocked) look.unlock();
-    orbit.enabled = true;
-    camera.fov = 65;
+    const cx = Number.isFinite(focus?.x) ? focus.x : 0;
+    const cz = Number.isFinite(focus?.z) ? focus.z : 0;
+    mode = "sky";
+    camera.fov = 55;
     camera.updateProjectionMatrix();
-    camera.position.set(42, 38, 54);
-    orbit.target.set(0, 2, 0);
-    orbit.update();
-    onMode?.(mode);
+    applySky(cx, cz, focus?.height);
+    onMode?.("sky");
     onLock?.(false);
   }
 
@@ -153,11 +186,24 @@ export function createControls(
     };
   }
 
+  function getCameraPose() {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    return {
+      mode,
+      x: camera.position.x,
+      y: camera.position.y,
+      z: camera.position.z,
+      dirY: dir.y,
+    };
+  }
+
   function update(dt) {
-    if (mode === "orbit") {
+    if (mode === "sky") {
       orbit.update();
       return;
     }
+    if (mode !== "walk") return;
     camera.getWorldDirection(lookDir);
     lookDir.y = 0;
     if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1);
@@ -199,5 +245,8 @@ export function createControls(
     }
   }
 
-  return { orbit, look, getMode: () => mode, setMode, setLookLocked, update, setKeys, rotateLook, getLookPose, getState, setState };
+  return {
+    orbit, look, getMode: () => mode, setMode, pose, setLookLocked, update, setKeys, rotateLook,
+    getLookPose, getCameraPose, getState, setState,
+  };
 }

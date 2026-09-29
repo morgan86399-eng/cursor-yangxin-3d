@@ -247,23 +247,35 @@ function addSign(parent, text, x, y, z, yaw, name) {
   return board;
 }
 
-function isChaoyangPark(green) {
-  return /朝陽/.test(green?.name || "") && (green.kind === "park" || green.kind === "leisure");
+export function isDetailedPark(green) {
+  const kind = String(green?.kind || "");
+  return kind === "park" || kind === "garden";
 }
 
-function parkingLabel(lot) {
-  const blob = `${lot?.name || ""} ${lot?.operator || ""}`;
-  if (!/朝陽公園/.test(blob)) return "";
-  return "朝陽公園停車場";
+export function parkDisplayName(green) {
+  if (!isDetailedPark(green)) return "";
+  if (/朝陽/.test(green?.name || "")) return "朝陽公園";
+  return green.name || "公園";
+}
+
+export function parkingDisplayName(lot) {
+  const blob = `${lot?.name || ""} ${lot?.operator || ""}`.trim();
+  if (/朝陽公園/.test(blob)) return "朝陽公園停車場";
+  if (lot?.name) return lot.name;
+  if (/停車/.test(lot?.operator || "")) return lot.operator;
+  if (lot?.ring?.length >= 4) return "停車場";
+  return "";
 }
 
 function addPark(parent, green, project, radius, colliders) {
+  const label = parkDisplayName(green);
+  if (!label) return null;
   const pts = localRing(green.ring, project);
   if (openPts(pts).length < 3) return null;
   if (distanceToRing(0, 0, pts) > radius + 80) return null;
   const m = materials();
   const group = new THREE.Group();
-  group.name = "chaoyang-park";
+  group.name = label === "朝陽公園" ? "chaoyang-park" : "park";
   addSurface(group, pts, 0.045, m.lawn, "park-lawn");
 
   const n = openPts(pts).length;
@@ -361,12 +373,12 @@ function addPark(parent, green, project, radius, colliders) {
     const sz = near.z + (dz / len) * 4.2;
     if (pointInRing(sx, sz, pts)) {
       const yaw = Math.atan2(-(dx / len), -(dz / len));
-      addSign(group, "朝陽公園", sx, 1.7, sz, yaw, "park-sign");
+      addSign(group, label, sx, 1.7, sz, yaw, "park-sign");
     }
   }
 
   group.userData = {
-    name: "朝陽公園",
+    name: label,
     osmName: green.name || "朝陽森林公園",
     osmId: green.id,
     role: "park",
@@ -388,7 +400,7 @@ function addPark(parent, green, project, radius, colliders) {
 }
 
 function addParking(parent, lot, project, radius) {
-  const label = parkingLabel(lot);
+  const label = parkingDisplayName(lot);
   if (!label) return null;
   const pts = localRing(lot.ring, project);
   if (openPts(pts).length < 3) return null;
@@ -486,7 +498,6 @@ export function createOpenSpace(osm, parkingLots, project, radius, colliders = [
   let parkName = "";
   let parkingName = "";
   for (const green of osm?.greens || []) {
-    if (!isChaoyangPark(green)) continue;
     const built = addPark(group, green, project, radius, colliders);
     if (!built) continue;
     parkName = built.group.userData.name;
