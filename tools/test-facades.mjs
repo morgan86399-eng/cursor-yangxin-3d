@@ -255,6 +255,32 @@ try {
   assert.equal(recorded.fills[0].color, "#efe2cf");
   assert.ok(recorded.fills.some((fill) => fill.color === "#c44536"), "shophouse ground floor keeps a sign band");
   assert.ok(recorded.fills.some((fill) => fill.color === "#6a2c24"), "sign board keeps a thickness shadow");
+  const unsigned = { fills: [] };
+  paintFacadeAtlas({
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
+    fillRect(x, y, width, height) { unsigned.fills.push({ x, y, width, height, color: this.fillStyle }); },
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+  }, "shophouse", 3, 0, { paintedSign: false });
+  assert.equal(unsigned.fills.some((fill) => fill.color === "#c44536" || fill.color === "#6a2c24"), false,
+    "a face that already has an extruded shop sign must not also paint a sign band");
+  const unsignedCivic = { fills: [] };
+  paintFacadeAtlas({
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
+    fillRect(x, y, width, height) { unsignedCivic.fills.push({ color: this.fillStyle }); },
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+  }, "civic", 2, 0, { paintedSign: false });
+  assert.equal(unsignedCivic.fills.some((fill) => fill.color === "#3e5c49"), false,
+    "civic atlas skips its sign band when a physical board owns the name");
   assert.ok(recorded.fills.some((fill) => fill.color === "#b5523a"), "shophouse keeps an awning");
   assert.ok(recorded.fills.some((fill) => fill.color === "#4a3b32"), "ground floor keeps shop-bay partitions");
   assert.ok(recorded.fills.some((fill) => fill.color === "#d9d1c4"), "windows keep a frame lip");

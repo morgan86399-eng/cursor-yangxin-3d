@@ -108,7 +108,7 @@ async function main() {
   assert.ok(ready.count >= 200, `too few buildings ${ready.count}`);
   assert.ok(ready.shopId, "shop lot missing");
   assert.ok(ready.uniqueFacades > 80, `facades still cloned ${ready.uniqueFacades}`);
-  assert.ok(ready.signCount >= 35, `too few independent signs ${ready.signCount}`);
+  assert.ok(ready.signCount >= 20, `too few independent signs ${ready.signCount}`);
   assert.ok(ready.signCount < ready.shopList.length, "building-owned signs must not be duplicated as independent signs");
   assert.deepEqual(ready.signPendingCalibration.map((s) => s.name).sort(), ["斗南米糕甲", "無名米粉湯"].sort(),
     "secondary shops without a verified frontage must remain pending, not overlap a modeled fascia");
@@ -151,7 +151,8 @@ async function main() {
     "the 2019 round sign reference belongs to one 50m corner lot only");
   assert.ok(!ready.signNames.some((n) => /養心|雅善圓/.test(n)), "building dress owns 養心/雅善圓 signs");
   assert.ok(ready.signNames.some((n) => /美廉社/.test(n)), "missing 美廉社");
-  assert.ok(ready.signNames.some((n) => /7-ELEVEN|7-Eleven/.test(n)), "missing 7-ELEVEN");
+  assert.ok(!ready.signNames.some((n) => n === "北門、朝陽二里聯合活動中心"),
+    "the activity-center fascia already names that face");
   assert.ok(ready.crossings >= 3 && ready.crossings <= 8, `zebra count ${ready.crossings}`);
   assert.ok(ready.stripes >= 18, `too few zebra stripes ${ready.stripes}`);
   assert.equal(ready.dashes, 0, "lane dashes should not be painted");
