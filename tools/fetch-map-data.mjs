@@ -283,6 +283,21 @@ async function fetchOsm(origin) {
     greens.push({ id: `way/${el.id}`, name: t.name || "", kind: t.leisure || t.landuse, ring: coords });
   }
 
+  const parking = [];
+  for (const el of elements) {
+    if (el.type !== "way" || el.tags?.amenity !== "parking") continue;
+    const coords = closeRing(wayCoords(el, nodes));
+    if (coords.length < 4) continue;
+    parking.push({
+      id: `way/${el.id}`,
+      name: el.tags.name || "",
+      operator: el.tags.operator || "",
+      parking: el.tags.parking || "",
+      access: el.tags.access || "",
+      ring: coords,
+    });
+  }
+
   const water = [];
   for (const el of elements) {
     if (el.type !== "way") continue;
@@ -320,7 +335,7 @@ async function fetchOsm(origin) {
     });
   }
 
-  return { buildings, roads, greens, water, pois };
+  return { buildings, roads, greens, water, pois, parking };
 }
 
 function lonLatToTile(lat, lon, z) {
@@ -502,9 +517,17 @@ async function main() {
     fetchedAt: new Date().toISOString(),
   };
 
+  const parking = osm.parking || [];
+  delete osm.parking;
   await writeFile(path.join(DATA, "map-config.json"), JSON.stringify(config, null, 2));
   await writeFile(path.join(DATA, "osm-200m.json"), JSON.stringify(osm));
-  console.log("wrote", DATA);
+  await writeFile(path.join(DATA, "parking.json"), JSON.stringify({
+    source: "osm",
+    attribution: "© OpenStreetMap contributors",
+    note: "平面停車場多邊形。朝陽公園停車場在 OSM 以 operator=朝陽公園平面停車場 標註。",
+    lots: parking,
+  }, null, 2));
+  console.log("wrote", DATA, `parking ${parking.length}`);
 }
 
 main().catch((err) => {

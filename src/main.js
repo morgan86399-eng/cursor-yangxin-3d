@@ -13,6 +13,7 @@ import { makePavementDetail } from "./textures.js";
 import { createCourtyardFarm } from "./farm.js";
 import { createNear50Inventory, near50CameraPose } from "./near50-inventory.js";
 import { applyFacadeMode, normalizeFacadeMode } from "./facade-atlas-25d.js";
+import { createOpenSpace } from "./open-space.js";
 
 const statusEl = document.getElementById("status");
 const addressEl = document.getElementById("address");
@@ -52,13 +53,14 @@ async function loadJson(url) {
 async function boot() {
   setStatus("載入街區資料…");
   if (document.fonts?.ready) await document.fonts.ready.catch(() => {});
-  const [config, osm, edits, shopData, lotData, crossingData] = await Promise.all([
+  const [config, osm, edits, shopData, lotData, crossingData, parkingData] = await Promise.all([
     loadJson("./data/map-config.json"),
     loadJson("./data/osm-200m.json"),
     loadJson("./data/edits.json").catch(() => ({ buildings: {} })),
     loadJson("./data/shops.json").catch(() => ({ shops: [] })),
     loadJson("./data/buildings-nlsc.json").catch(() => ({ buildings: [] })),
     loadJson("./data/crossings.json").catch(() => ({ crossings: [] })),
+    loadJson("./data/parking.json").catch(() => ({ lots: [] })),
   ]);
   const shops = shopData.shops || [];
   const buildingCount = lotData.buildings?.length || osm.buildings?.length || 0;
@@ -133,6 +135,9 @@ async function boot() {
     facadeMode: initialFacadeMode,
   });
   scene.add(world.group);
+  const openSpace = createOpenSpace(osm, parkingData.lots || [], project, config.radiusMeters, world.colliders);
+  scene.add(openSpace.group);
+  Object.assign(world.landmarkViews, openSpace.views);
   const near50Inventory = createNear50Inventory(lotData.buildings || osm.buildings, world.colliders, project);
   if (initialView === "near50") {
     metaEl.textContent = `${config.label} · 50 公尺逐棟檢視 ${world.facadeStats.near50Footprints} 筆建物輪廓 · 背景地圖仍涵蓋 ${config.radiusMeters} 公尺`;
@@ -185,7 +190,7 @@ async function boot() {
     const title = document.createElement("strong");
     title.textContent = `${String(index + 1).padStart(2, "0")} · ${item.label}`;
     const detail = document.createElement("span");
-    const roleLabels = { shop: "店面個別建模", neighbor: "鄰房個別建模", temple: "寺廟個別建模", landmark: "地標個別建模", generic: "通用推估外觀" };
+    const roleLabels = { shop: "店面個別建模", neighbor: "鄰房個別建模", temple: "寺廟個別建模", landmark: "地標個別建模", civic: "公共建築個別建模", generic: "通用推估外觀" };
     detail.textContent = `距中心 ${item.distance.toFixed(1)}m · ${item.height == null ? "模型未載入" : `${item.height.toFixed(1)}m 高度推估`}${item.observedFloors ? ` · ${item.observedFloors} 層目視` : ""} · ${roleLabels[item.modelRole] || "外觀類型待查"}`;
     if (item.recessedWindows) detail.textContent += ` · ${item.recessedWindows} 處立體窗洞（窗位推估）`;
     if (item.normalMapped) detail.textContent += " · 牆面凹凸光影（材質樣式推估）";
@@ -358,6 +363,24 @@ async function boot() {
     controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
     controls.orbit.minDistance = 2.2;
     controls.orbit.update();
+  } else if ((view === "chaoyang" || view === "chaoyang-temple") && world.landmarkViews?.chaoyang) {
+    const cam = world.landmarkViews.chaoyang;
+    camera.position.set(cam.x, cam.y, cam.z);
+    controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
+    controls.orbit.minDistance = 2.2;
+    controls.orbit.update();
+  } else if ((view === "park" || view === "chaoyang-park") && world.landmarkViews?.park) {
+    const cam = world.landmarkViews.park;
+    camera.position.set(cam.x, cam.y, cam.z);
+    controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
+    controls.orbit.minDistance = 2.2;
+    controls.orbit.update();
+  } else if ((view === "parking" || view === "chaoyang-parking") && world.landmarkViews?.parking) {
+    const cam = world.landmarkViews.parking;
+    camera.position.set(cam.x, cam.y, cam.z);
+    controls.orbit.target.set(cam.lookX, cam.lookY, cam.lookZ);
+    controls.orbit.minDistance = 2.2;
+    controls.orbit.update();
   } else if (view === "yashan" || view === "yashan-close") {
     const spot = (world.brandViews || []).find((item) => item.brand === "yashanyuan") || world.brandViews?.[0];
     if (spot) {
@@ -517,6 +540,7 @@ async function boot() {
     brandViews: world.brandViews || [],
     neighborViews: world.neighborViews || [],
     landmarkViews: world.landmarkViews || {},
+    openSpace: openSpace.group.userData,
     zhenfu: world.zhenfu || null,
     farm,
     renderQuality: {
@@ -571,8 +595,19 @@ async function boot() {
     requestAnimationFrame(tick);
   }
   tick();
+  const viewLabels = {
+    chaoyang: "朝陽宮",
+    "chaoyang-temple": "朝陽宮",
+    park: "朝陽公園",
+    "chaoyang-park": "朝陽公園",
+    parking: "朝陽公園停車場",
+    "chaoyang-parking": "朝陽公園停車場",
+  };
   if (!(initialBuildingId && focusNear50Building(initialBuildingId))) {
-    setStatus(`已對準 ${config.geocodeNote || config.address}，店家點位 ${shops.length} 筆`);
+    const framed = viewLabels[initialView];
+    setStatus(framed
+      ? `已對準${framed}`
+      : `已對準 ${config.geocodeNote || config.address}，店家點位 ${shops.length} 筆`);
   }
 }
 

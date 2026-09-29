@@ -269,9 +269,11 @@ async function main() {
                   ? "dentist"
                   : t.amenity === "marketplace"
                     ? "market"
-                    : t.amenity
-                      ? "shop"
-                      : null;
+                    : t.amenity === "community_centre"
+                      ? "civic"
+                      : t.amenity
+                        ? "shop"
+                        : null;
     if (!kind && !t.shop) continue;
     const coord = elCoord(el);
     if (!coord) continue;
@@ -286,7 +288,15 @@ async function main() {
       lon: coord.lon,
       id: `${el.type}-${el.id}`,
       no: /全鎮/.test(name) ? "" : t["addr:housenumber"] || "",
-      sub: /全鎮/.test(name) ? "春日路238-240號" : t["addr:housenumber"] ? `鎮撫街${t["addr:housenumber"]}號` : "",
+      sub: /全鎮/.test(name)
+        ? "春日路238-240號"
+        : t["addr:full"]
+          ? String(t["addr:full"]).replace(/^.*?區/, "")
+          : t["addr:street"] && t["addr:housenumber"]
+            ? `${t["addr:street"]}${t["addr:housenumber"]}號`
+            : t["addr:housenumber"]
+              ? `鎮撫街${t["addr:housenumber"]}號`
+              : "",
       source: "osm",
       makeHouse: !t.building,
     });

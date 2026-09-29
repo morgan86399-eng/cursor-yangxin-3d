@@ -161,6 +161,7 @@ export function createSigns(shops, roads, project, radius, colliders) {
   const r2 = radius * radius;
   const nearR2 = NEAR_SIGN_DETAIL_RADIUS ** 2;
   const modeledSigns = modeledSignShopIds(shops, roads, project, colliders);
+  const plaqueNames = new Set((colliders || []).map((c) => c.plaque).filter(Boolean));
   const occupiedNames = new Set((shops || [])
     .filter((shop) => modeledSigns.has(shop.id) || dressOwnsShopSign(shop) || facadeOwnsListedSign(shop))
     .map((shop) => shop.name));
@@ -173,7 +174,7 @@ export function createSigns(shops, roads, project, radius, colliders) {
   const pending = [];
 
   for (const shop of shops || []) {
-    if (dressOwnsShopSign(shop) || facadeOwnsListedSign(shop) || modeledSigns.has(shop.id)) continue;
+    if (dressOwnsShopSign(shop) || facadeOwnsListedSign(shop) || modeledSigns.has(shop.id) || plaqueNames.has(shop.name)) continue;
     const p = project.toLocal(shop.lat, shop.lon);
     if (p.x * p.x + p.z * p.z > r2) continue;
     const near = p.x * p.x + p.z * p.z <= nearR2;

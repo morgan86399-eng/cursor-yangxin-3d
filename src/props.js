@@ -254,6 +254,8 @@ export function createStreetProps(osm, config, project, colliders, roads) {
   }
 
   for (const green of osm.greens || []) {
+    // 朝陽公園改由 open-space 畫草坪、步道與樹，避免再撒一層隨機樹。
+    if (/朝陽/.test(green.name || "") && green.kind === "park") continue;
     const pts = localRing(green.ring, project);
     if (pts.length < 4) continue;
     const minX = Math.min(...pts.map((p) => p.x));

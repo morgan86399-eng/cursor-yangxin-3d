@@ -25,9 +25,10 @@
     "test:street": "node tools/test-street-detail.mjs",
     "test:ground-evidence": "node tools/test-ground-evidence.mjs",
     "test:temple": "node tools/test-temple.mjs",
+    "test:landmarks": "node tools/test-landmarks.mjs",
     "test:farm": "node tools/test-farm-api.mjs && node tools/test-farm-ui.mjs",
     "test:farm-ui": "node tools/test-farm-ui.mjs",
-    "test": "node tools/test-vectorize.mjs && node tools/test-player.mjs && node tools/test-buildings.mjs && node tools/test-cladding.mjs && node tools/test-lots.mjs && node tools/test-facades.mjs && node tools/test-sign-detail.mjs && node tools/test-street-detail.mjs && node tools/test-ground-evidence.mjs && node tools/test-temple.mjs && node tools/test-farm-api.mjs && node tools/test-farm-ui.mjs"
+    "test": "node tools/test-vectorize.mjs && node tools/test-player.mjs && node tools/test-buildings.mjs && node tools/test-cladding.mjs && node tools/test-lots.mjs && node tools/test-facades.mjs && node tools/test-sign-detail.mjs && node tools/test-street-detail.mjs && node tools/test-ground-evidence.mjs && node tools/test-temple.mjs && node tools/test-landmarks.mjs && node tools/test-farm-api.mjs && node tools/test-farm-ui.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

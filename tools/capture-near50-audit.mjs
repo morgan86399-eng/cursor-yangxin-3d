@@ -42,11 +42,11 @@ try {
     colliderRings: window.__yangxin.colliders.map((item) => ({ id: item.id, pts: item.points })),
   }));
   assert.equal(runtime.inventory.length, 31);
-  assert.equal(runtime.inventory.filter((item) => item.modelRole === "generic").length, 19);
+  assert.equal(runtime.inventory.filter((item) => item.modelRole === "generic").length, 18);
   assert.ok(runtime.inventory.every((item) => item.modeled && item.heightEstimated && !item.facadeCalibrated));
   const normalIds = [...new Set(runtime.surfaces.surfaces.map((item) => item.id))].sort();
   assert.deepEqual(normalIds, runtime.inventory.filter((item) => item.modelRole === "generic").map((item) => item.id).sort());
-  assert.equal(normalIds.length, 19);
+  assert.equal(normalIds.length, 18);
   for (const surface of runtime.surfaces.surfaces) {
     assert.equal(surface.type, "MeshStandardMaterial");
     assert.equal(surface.colorSpace, "srgb");
@@ -98,7 +98,7 @@ try {
     assert.equal(row.count, 31);
     assert.ok(row.scrollWidth <= width);
     assert.deepEqual(row.smallButtons, []);
-    assert.match(row.summary, /19 筆仍用通用推估外觀/);
+    assert.match(row.summary, /18 筆仍用通用推估外觀/);
     await page.screenshot({ path: path.join(out, `inspector-${width}.png`) });
     await page.evaluate(() => document.getElementById("near50Close").click());
   }
