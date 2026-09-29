@@ -1,0 +1,17 @@
+{
+  "source": "OpenStreetMap highway=crossing around 230m of 鎮撫街46號",
+  "fetchedAt": "2026-09-22",
+  "note": "只畫 crossing:markings=zebra。未繪設與無標記者排除。鎮撫街46號門前沒有斑馬線；最近的是朝陽街口，約 40 公尺。車道線、路邊線不另畫，鎮撫街事故紀錄為未繪設。",
+  "crossings": [
+    { "lat": 24.996262, "lon": 121.315759, "markings": "zebra" },
+    { "lat": 24.996314, "lon": 121.315934, "markings": "zebra" },
+    { "lat": 24.996375, "lon": 121.315818, "markings": "zebra" },
+    { "lat": 24.996221, "lon": 121.315874, "markings": "zebra" },
+    { "lat": 24.9982, "lon": 121.31503, "markings": "zebra" },
+    { "lat": 24.998286, "lon": 121.315078, "markings": "zebra" },
+    { "lat": 24.997347, "lon": 121.315446, "markings": "zebra" },
+    { "lat": 24.99726, "lon": 121.315413, "markings": "zebra" },
+    { "lat": 24.99825, "lon": 121.315196, "markings": "zebra" },
+    { "lat": 24.998176, "lon": 121.315121, "markings": "zebra" }
+  ]
+}

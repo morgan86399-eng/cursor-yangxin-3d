@@ -1,0 +1,11 @@
+{
+  "comment": "依 OSM id 覆寫建物。招牌在 shops.json；也可在此改養心推拿外觀。",
+  "buildings": {
+    "shop": {
+      "label": "養心推拿｜鎮撫街46號",
+      "color": "#d4a574",
+      "height": 6.6,
+      "roof": "#8a5a32"
+    }
+  }
+}

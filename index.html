@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>心田 3D 農場｜鎮撫街 46 號周邊 50 公尺</title>
+  <meta name="description" content="鎮撫街46號周邊50公尺 3D 農場試作。可逐棟檢視31筆建物輪廓，第一視角移動並在遊戲田區同步心田種植；未校準立面仍標明推估。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <aside class="hud">
+    <h1>心田 3D｜鎮撫街</h1>
+    <p id="address">桃園市桃園區鎮撫街46號</p>
+    <p class="muted" id="meta">半徑 200 公尺</p>
+    <p class="muted" id="status">準備中…</p>
+    <div class="actions">
+      <button id="focusBtn" type="button">查看46號</button>
+      <button id="near50Btn" type="button" aria-controls="near50Panel" aria-expanded="false">50公尺逐棟</button>
+      <button id="orbitBtn" type="button">環景檢視</button>
+      <button id="walkBtn" type="button">第一視角</button>
+      <button id="lockBtn" type="button" hidden aria-pressed="false">鎖定滑鼠</button>
+    </div>
+    <p class="muted" id="hint">拖曳旋轉、滾輪縮放。點「第一視角」可在平地移動、跳躍，撞到房子會被擋住。</p>
+  </aside>
+  <aside id="near50Panel" class="near50-panel" aria-labelledby="near50Title" hidden>
+    <div class="near50-head">
+      <h2 id="near50Title">50 公尺逐棟檢視</h2>
+      <button id="near50Close" type="button" aria-label="關閉逐棟清冊">關閉</button>
+    </div>
+    <p id="near50Summary" class="near50-summary"></p>
+    <p class="near50-caution">點選建物可查看模型與相鄰輪廓間距。通用或個別建模都尚未完成現況立面校準；公尺高度與現場間距未實測，店名點位也不代表招牌精確對位。</p>
+    <div id="near50List" class="near50-list" role="list"></div>
+  </aside>
+  <section id="farmPanel" class="farm-panel" hidden>
+    <strong id="farmTitle">庭院田地</strong>
+    <span id="farmHint">靠近田地後可互動</span>
+    <button id="farmAction" type="button">同步中…</button>
+    <div id="cropPicker" class="crop-picker" hidden></div>
+  </section>
+  <div id="farmSync" class="farm-sync">正在與心田同步…</div>
+  <div class="mobile-controls" aria-label="行動移動控制">
+    <button data-move="w" aria-label="向前">▲</button>
+    <button data-move="a" aria-label="向左">◀</button>
+    <button data-move="s" aria-label="向後">▼</button>
+    <button data-move="d" aria-label="向右">▶</button>
+  </div>
+  <p class="model-note">46號3層、48號5層依現地目視；建物米高、立面與招牌外觀、路面與地坪色彩含推估，門前尚未影像校準。</p>
+  <details class="legal-note">
+    <summary>模型推估與使用說明</summary>
+    <p>46號3層、48號5層依現地目視；建物米高、立面與招牌外觀、路面與地坪色彩仍含推估，門前尚未影像校準。</p>
+    <p>本場景為虛擬遊戲內容；建築、道路與地址僅作公開地理資料參考，不代表土地所有權、官方合作或現實耕作許可。請勿依遊戲指示進入私人土地。</p>
+    <p><a href="./data/ground-surface-evidence.json" target="_blank" rel="noopener">路面與地坪資料來源及可信度</a></p>
+    <p><a href="./data/near50-floor-evidence.json" target="_blank" rel="noopener">50公尺建物樓層對位及未驗部分</a></p>
+    <p>春日路 2019 歷史影像參考：<a href="https://www.mapillary.com/app/?pKey=516366592838568" target="_blank" rel="noopener noreferrer">街角影像</a>、<a href="https://www.mapillary.com/app/?pKey=505287670657351" target="_blank" rel="noopener noreferrer">鎮撫街路牌影像</a>（andylin／Mapillary；<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>）。本場景自行建模；路牌位置推估，現況未驗。</p>
+  </details>
+  <div id="crosshair"></div>
+  <div id="lockHint">滑鼠未鎖定；拖曳畫面可轉頭</div>
+  <div class="credit" id="credit"></div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

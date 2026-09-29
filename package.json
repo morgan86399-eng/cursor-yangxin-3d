@@ -1,0 +1,39 @@
+{
+  "name": "yangxin-3d",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "桃園養心推拿 3D 地圖：鎮撫街46號往外 200 公尺（獨立專案，不取代舊心田）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "fetch-map": "node tools/fetch-map-data.mjs",
+    "fetch-ground": "node tools/fetch-map-data.mjs --ground-only",
+    "fetch-shops": "node tools/bake-shops.mjs",
+    "fetch-buildx": "node tools/fetch-buildx.mjs",
+    "test:player": "node tools/test-player.mjs",
+    "test:buildings": "node tools/test-buildings.mjs",
+    "test:cladding": "node tools/test-cladding.mjs",
+    "test:lots": "node tools/test-lots.mjs",
+    "test:vectorize": "node tools/test-vectorize.mjs",
+    "test:e2e": "node tools/e2e-walk.mjs",
+    "test:e2e-ground": "node tools/e2e-ground.mjs",
+    "test:e2e-garden": "node tools/e2e-garden.mjs",
+    "test:facades": "node tools/test-facades.mjs",
+    "test:signs": "node tools/test-sign-detail.mjs",
+    "test:street": "node tools/test-street-detail.mjs",
+    "test:ground-evidence": "node tools/test-ground-evidence.mjs",
+    "test:temple": "node tools/test-temple.mjs",
+    "test:farm": "node tools/test-farm-api.mjs",
+    "test": "node tools/test-vectorize.mjs && node tools/test-player.mjs && node tools/test-buildings.mjs && node tools/test-cladding.mjs && node tools/test-lots.mjs && node tools/test-facades.mjs && node tools/test-sign-detail.mjs && node tools/test-street-detail.mjs && node tools/test-ground-evidence.mjs && node tools/test-temple.mjs && node tools/test-farm-api.mjs"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.11.0",
+    "sharp": "^0.35.4",
+    "vite": "^6.0.0"
+  }
+}

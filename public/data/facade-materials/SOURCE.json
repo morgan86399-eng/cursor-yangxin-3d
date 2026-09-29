@@ -1,0 +1,23 @@
+{
+  "license": "Creative Commons CC0 1.0 Universal",
+  "licenseUrl": "https://docs.ambientcg.com/license/",
+  "source": "ambientCG",
+  "assets": {
+    "Tiles107_Color.jpg": "https://ambientcg.com/view?id=Tiles107",
+    "Bricks060_Color.jpg": "https://ambientcg.com/view?id=Bricks060",
+    "Plaster003_Color.jpg": "https://ambientcg.com/view?id=Plaster003",
+    "Bricks060_NormalGL.jpg": "https://ambientcg.com/view?id=Bricks060",
+    "Tiles107_NormalGL.jpg": "https://ambientcg.com/view?id=Tiles107",
+    "Plaster003_NormalGL.jpg": "https://ambientcg.com/view?id=Plaster003"
+  },
+  "scope": "Estimated cladding for near-field game models; not surveyed building facades or current shop signs.",
+  "sha256": {
+    "Bricks060_Color.jpg": "d56a6900be43dc9d37c0725257a04ee4e0d3840efd53ad9bab82cc6897de8435",
+    "Bricks060_NormalGL.jpg": "c4b8fffa7cb3d2e9462f93d6e65ffcd6e8edc2f202b782018ae6a508c23998cd",
+    "Plaster003_Color.jpg": "b03049c37f5059ac4ecdd5d61a514b0a6089beb2b9a0ac2224bf6bf505b7f101",
+    "Plaster003_NormalGL.jpg": "dc823d953b01ae025ba6b6196ad83d2b25333bd6faf808ea4ee30b1334b57b6e",
+    "Tiles107_Color.jpg": "09bc9cf6e08dc4a58df668df0f2cb30fea54eee48ece77263419222497a05d66",
+    "Tiles107_NormalGL.jpg": "9056b78a5e9d6021d54783a4674caadc0647abf43d6ef056d61afea0c31a0915"
+  },
+  "normalConvention": "OpenGL (linear vector data); original 1K JPG maps reused from existing Unity facade assets"
+}
