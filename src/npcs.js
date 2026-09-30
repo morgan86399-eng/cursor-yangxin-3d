@@ -59,11 +59,17 @@ function person(id, npc) {
   if (id === "uncle") {
     const wood = new THREE.MeshLambertMaterial({ color: 0x6b4a32 });
     const seat = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.1, 0.42), wood);
-    seat.position.set(0, 0.42, 0.2);
+    seat.position.set(0.95, 0.42, 0.15);
+    seat.name = "npc-bench";
     seat.castShadow = true;
     const back = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.42, 0.08), wood);
-    back.position.set(0, 0.68, 0.38);
-    group.add(seat, back);
+    back.position.set(0.95, 0.68, 0.34);
+    back.name = "npc-bench";
+    const legA = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.42, 0.08), wood);
+    legA.position.set(0.42, 0.21, 0.15);
+    const legB = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.42, 0.08), wood);
+    legB.position.set(1.48, 0.21, 0.15);
+    group.add(seat, back, legA, legB);
   }
   const plate = nameplate(npc.name);
   plate.position.y = 1.92;

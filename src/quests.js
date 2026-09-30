@@ -55,7 +55,7 @@ export const STREET_QUESTS = Object.freeze([
   }),
   Object.freeze({
     id: "Q10", name: "聽阿伯講舊街", place: "朝陽公園", anchor: "park",
-    npc: "uncle", range: 3.5, mode: "dialogue", action: "聽故事",
+    npc: "uncle", range: 4.5, mode: "dialogue", action: "聽舊街",
     hint: "把兩句舊街的事聽完。", reward: "心田+6", points: 6,
   }),
   Object.freeze({
@@ -170,25 +170,55 @@ function namedNpc(point, fields) {
   return { x: point.x, z: point.z, ...fields };
 }
 
+function parkUnclePoint(park) {
+  const gate = park?.waypoints?.find((point) => point.id === "gate") || park?.waypoints?.[0];
+  const far = park?.waypoints?.find((point) => point.id === "far") || park?.waypoints?.[1] || gate;
+  if (!gate || !far) return null;
+  const dx = far.x - gate.x;
+  const dz = far.z - gate.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const fx = dx / len;
+  const fz = dz / len;
+  const px = -fz;
+  const pz = fx;
+  const ring = park?.ring;
+  for (const side of [1, -1]) {
+    for (const dist of [3.6, 4.4, 2.8]) {
+      const spot = {
+        x: gate.x + px * side * dist + fx * 1.4,
+        z: gate.z + pz * side * dist + fz * 1.4,
+      };
+      if (ring?.length && !pointInRing(spot.x, spot.z, ring)) continue;
+      const onPad = (park.waypoints || []).some((point) => Math.hypot(spot.x - point.x, spot.z - point.z) < 2.2);
+      if (onPad) continue;
+      return spot;
+    }
+  }
+  return { x: gate.x + fx * 4 + px * 2.4, z: gate.z + fz * 4 + pz * 2.4 };
+}
+
+function waypointLitIds(row, waypoints = []) {
+  const known = new Set(waypoints.map((point) => point.id));
+  const fromChoice = String(row?.choice || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => known.has(id));
+  if (fromChoice.length) return fromChoice;
+  const step = Math.max(0, Math.floor(Number(row?.step) || 0));
+  if (step > 0) return waypoints.slice(0, step).map((point) => point.id);
+  return [];
+}
+
 export function withNpcs(anchors = {}) {
   if (anchors?.npcs?.liu && anchors?.npcs?.ahua && anchors?.npcs?.keeper) return anchors;
   const beside = (point, dx, dz) => (point ? { x: point.x + dx, z: point.z + dz } : null);
-  const gate = anchors.park?.waypoints?.[0];
-  const far = anchors.park?.waypoints?.[1] || gate;
-  let uncle = null;
-  if (gate && far) {
-    const dx = far.x - gate.x;
-    const dz = far.z - gate.z;
-    const len = Math.hypot(dx, dz) || 1;
-    uncle = { x: gate.x + (dx / len) * 4, z: gate.z + (dz / len) * 4 };
-  }
   return {
     ...anchors,
     npcs: {
       liu: namedNpc(beside(anchors.yashan, 1.6, 2), { name: "劉師父", range: 3.2, questId: "Q8" }),
       keeper: namedNpc(beside(anchors.chaoyang, 3.2, 1.2), { name: "廟祝", range: 3.2, questId: "Q12" }),
       ahua: namedNpc(beside(anchors.stall, 3.4, 0), { name: "阿花", range: 3, questId: "Q9" }),
-      uncle: namedNpc(uncle, { name: "散步阿伯", range: 3.5, questId: "Q10" }),
+      uncle: namedNpc(parkUnclePoint(anchors.park), { name: "散步阿伯", range: 4.5, questId: "Q10" }),
       chen: namedNpc(beside(anchors.activity, 3.2, 1.0), { name: "志工小陳", range: 3.2, questId: "Q11" }),
       officer: namedNpc(beside(anchors.station, -2.2, 6.6), { name: "巡邏警員", range: 3.2, questId: "" }),
     },
@@ -212,18 +242,7 @@ export function bindQuestAnchors({ landmarkViews = {}, brandViews = [], parkQues
     park,
   };
   const fallback = withNpcs(anchors).npcs;
-  const gate = park?.waypoints?.[0];
-  const far = park?.waypoints?.[1] || gate;
-  let uncle = fallback.uncle;
-  if (gate && far) {
-    const dx = far.x - gate.x;
-    const dz = far.z - gate.z;
-    const len = Math.hypot(dx, dz) || 1;
-    uncle = namedNpc(
-      { x: gate.x + (dx / len) * 4, z: gate.z + (dz / len) * 4 },
-      { name: "散步阿伯", range: 3.5, questId: "Q10" },
-    );
-  }
+  const uncle = namedNpc(parkUnclePoint(park), { name: "散步阿伯", range: 4.5, questId: "Q10" }) || fallback.uncle;
   return {
     ...anchors,
     npcs: {
@@ -320,13 +339,20 @@ export function advanceQuests(progress, input = {}) {
   const q4row = next.quests.Q4;
   const park = anchors.park;
   const insidePark = walk && park?.ring?.length ? pointInRing(x, z, park.ring) : false;
+  const nearAnyPad = walk && (park?.waypoints || []).some((point) => distance2d(x, z, point.x, point.z) <= QUEST_WAYPOINT_RADIUS + 6);
   if (q4row.status !== "done" && insidePark) q4row.entered = true;
-  if (q4row.status !== "done" && q4row.entered && park?.waypoints?.length) {
-    const waypoint = park.waypoints[q4row.step];
-    if (waypoint && distance2d(x, z, waypoint.x, waypoint.z) <= QUEST_WAYPOINT_RADIUS) {
-      q4row.step += 1;
-      if (q4row.step >= park.waypoints.length && complete(q4row, q4)) completed.push(q4);
+  if (q4row.status !== "done" && park?.waypoints?.length) {
+    const lit = new Set(waypointLitIds(q4row, park.waypoints));
+    if (walk) {
+      for (const point of park.waypoints) {
+        if (lit.has(point.id)) continue;
+        if (distance2d(x, z, point.x, point.z) <= QUEST_WAYPOINT_RADIUS) lit.add(point.id);
+      }
     }
+    const ordered = park.waypoints.filter((point) => lit.has(point.id)).map((point) => point.id);
+    q4row.choice = ordered.join(",");
+    q4row.step = ordered.length;
+    if (ordered.length >= park.waypoints.length && complete(q4row, q4)) completed.push(q4);
   }
 
   const talking = Boolean(input.talk);
@@ -403,7 +429,7 @@ export function advanceQuests(progress, input = {}) {
   if (hintQuest && nextId === current && next.quests[nextId]?.status !== "done") {
     if (hintQuest.id === "Q1") inHintRange = q1Near;
     else if (hintQuest.id === "Q3") inHintRange = Boolean(marketNear || stallNear);
-    else if (hintQuest.id === "Q4") inHintRange = Boolean(q4row.entered || insidePark);
+    else if (hintQuest.id === "Q4") inHintRange = Boolean(insidePark || nearAnyPad || q4row.step > 0);
     else if (hintQuest.mode === "dialogue" || hintQuest.mode === "delivery") inHintRange = dialogue.inRange;
     else inHintRange = nearInteract(hintQuest);
   }
@@ -415,10 +441,11 @@ export function advanceQuests(progress, input = {}) {
   } else if (affordance?.kind === "proximity") {
     objective = BY_ID.get(affordance.id)?.hint || objective;
   } else if (hintQuest && next.quests[hintQuest.id]?.status !== "done") {
-    if (hintQuest.id === "Q4" && q4row.entered) {
-      const waypoint = park?.waypoints?.[q4row.step];
-      const label = waypoint?.label || "下一處";
-      objective = `下一處：${label}（${Math.min(q4row.step + 1, park?.waypoints?.length || 3)}／${park?.waypoints?.length || 3}）。${hintQuest.hint}`;
+    if (hintQuest.id === "Q4" && q4row.status !== "done" && (insidePark || nearAnyPad || q4row.step > 0)) {
+      const lit = new Set(waypointLitIds(q4row, park?.waypoints || []));
+      const missing = (park?.waypoints || []).filter((point) => !lit.has(point.id)).map((point) => point.label);
+      const total = park?.waypoints?.length || 3;
+      objective = `踩亮地上的光圈：${missing.join("、") || "都亮了"}（${Math.min(q4row.step, total)}／${total}）。${hintQuest.hint}`;
     } else if (inHintRange) objective = hintQuest.hint;
     else objective = `前往${hintQuest.place}。靠近別的地點也能先做。`;
   }
@@ -461,8 +488,9 @@ export function questMarkerPoints(progress, anchors = {}) {
     if (quest.npc) point = placed.npcs?.[quest.npc] || pointOf(placed, quest.anchor);
     else if (quest.id === "Q3") point = pointOf(placed, "stall") || pointOf(placed, "market");
     else if (quest.id === "Q4") {
-      const step = book.quests.Q4.step;
-      const waypoint = anchors.park?.waypoints?.[step] || anchors.park?.waypoints?.[0];
+      const waypoints = anchors.park?.waypoints || [];
+      const lit = new Set(waypointLitIds(book.quests.Q4, waypoints));
+      const waypoint = waypoints.find((point) => !lit.has(point.id)) || waypoints[0];
       point = waypoint && Number.isFinite(waypoint.x) ? waypoint : null;
     } else point = pointOf(anchors, quest.anchor);
     if (!point) continue;

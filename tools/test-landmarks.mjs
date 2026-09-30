@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createProjector, distanceToRing } from "../src/geo.js";
+import { createProjector, distanceToRing, pointInRing } from "../src/geo.js";
 import { hitsCollider } from "../src/player.js";
-import { createOpenSpace } from "../src/open-space.js";
+import { createOpenSpace, PARK_WALK_REACH } from "../src/open-space.js";
 import { integrateOsmPlaceClasses } from "../src/lots.js";
 import { isZhenfuAnnex, isZhenfuHall } from "../src/temple.js";
 import {
@@ -104,7 +104,16 @@ assert.equal(space.quest?.waypoints?.length, 3);
 assert.equal(space.quest.waypoints[2].id, "parking");
 assert.equal(space.quest.waypoints[2].label, "停車場");
 assert.ok(space.quest.waypoints.every((point, index) => space.quest.waypoints.findIndex((other) => Math.hypot(other.x - point.x, other.z - point.z) < 5) === index),
-  "park waypoints must stay far enough apart to be walked in order");
+  "park waypoints must stay far enough apart to step on one at a time");
+const walkLimit = PARK_WALK_REACH - 0.8;
+for (const point of space.quest.waypoints) {
+  assert.ok(Math.hypot(point.x, point.z) <= walkLimit, `${point.id} radius ${Math.hypot(point.x, point.z).toFixed(1)}`);
+}
+assert.equal(pointInRing(space.quest.waypoints[0].x, space.quest.waypoints[0].z, space.quest.ring), true);
+assert.equal(pointInRing(space.quest.waypoints[1].x, space.quest.waypoints[1].z, space.quest.ring), true);
+const lot = parking.lots.find((item) => String(item.operator || item.name || "").includes("朝陽公園"));
+const lotPts = toPts(lot.ring);
+assert.equal(pointInRing(space.quest.waypoints[2].x, space.quest.waypoints[2].z, lotPts), true);
 let parkGates = 0;
 let parkingMarkers = 0;
 space.group.traverse((obj) => {
