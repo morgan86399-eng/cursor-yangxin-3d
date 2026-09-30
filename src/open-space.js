@@ -1,30 +1,20 @@
 import * as THREE from "three";
 import { distanceToRing, pointInRing } from "./geo.js";
 
-export function planParkWaypoints(ring, parking) {
+/** Walk clamp for the park slice. The decorative 200 m ring stays; this only lets feet reach 朝陽公園. */
+export const PARK_WALK_REACH = 258;
+const PARK_PAD_LIMIT = PARK_WALK_REACH - 14;
+
+export function planParkWaypoints(ring, parking, options = {}) {
   const pts = openPts(ring);
+  const limit = Number.isFinite(options.limit) ? options.limit : PARK_PAD_LIMIT;
+  const colliders = options.colliders || [];
   if (pts.length < 3 || !Number.isFinite(parking?.x) || !Number.isFinite(parking?.z)) return null;
-  const boundary = closestBoundaryPoint(pts, 0, 0);
-  const center = centroidOf(pts);
-  if (!boundary) return null;
-  const dx = center.x - boundary.x;
-  const dz = center.z - boundary.z;
-  const len = Math.hypot(dx, dz) || 1;
-  const ux = dx / len;
-  const uz = dz / len;
-  let gate = { x: boundary.x + ux * 4, z: boundary.z + uz * 4 };
-  if (!pointInRing(gate.x, gate.z, pts)) gate = { x: center.x, z: center.z };
-  let far = { x: center.x, z: center.z };
-  for (let step = 8; step <= 140; step += 4) {
-    const x = center.x + ux * step;
-    const z = center.z + uz * step;
-    if (!pointInRing(x, z, pts) || edgeDistance(x, z, pts) < 4) break;
-    if (Math.hypot(x - gate.x, z - gate.z) >= 12) far = { x, z };
-  }
-  if (Math.hypot(far.x - gate.x, far.z - gate.z) < 12) {
-    const alt = { x: center.x - ux * Math.min(10, len * 0.35), z: center.z - uz * Math.min(10, len * 0.35) };
-    far = pointInRing(alt.x, alt.z, pts) ? alt : { x: center.x, z: center.z };
-  }
+  if (Math.hypot(parking.x, parking.z) > limit) return null;
+  const gate = pickGate(pts, limit, colliders);
+  if (!gate) return null;
+  const far = pickFar(pts, gate, parking, limit, colliders);
+  if (!far) return null;
   return {
     ring: pts.map((point) => ({ x: point.x, z: point.z })),
     waypoints: [
@@ -33,6 +23,88 @@ export function planParkWaypoints(ring, parking) {
       { id: "parking", label: "停車場", x: parking.x, z: parking.z },
     ],
   };
+}
+
+function withinPadLimit(x, z, limit) {
+  return Math.hypot(x, z) <= limit;
+}
+
+function pickGate(pts, limit, colliders) {
+  const boundary = closestBoundaryPoint(pts, 0, 0);
+  const center = centroidOf(pts);
+  if (!boundary) return null;
+  const dx = center.x - boundary.x;
+  const dz = center.z - boundary.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const ux = dx / len;
+  const uz = dz / len;
+  const px = -uz;
+  const pz = ux;
+  for (let inset = 3.5; inset <= 16; inset += 0.5) {
+    for (const side of [0, 2.4, -2.4, 4.6, -4.6]) {
+      const x = boundary.x + ux * inset + px * side;
+      const z = boundary.z + uz * inset + pz * side;
+      if (!withinPadLimit(x, z, limit)) continue;
+      if (!pointInRing(x, z, pts) || edgeDistance(x, z, pts) < 2.2) continue;
+      if (blocked(x, z, colliders, 1.1)) continue;
+      return { x, z, ux, uz, px, pz };
+    }
+  }
+  return null;
+}
+
+function pickFar(pts, gate, parking, limit, colliders) {
+  const dirs = [
+    { x: gate.ux, z: gate.uz },
+    { x: gate.ux * 0.75 + gate.px * 0.66, z: gate.uz * 0.75 + gate.pz * 0.66 },
+    { x: gate.ux * 0.75 - gate.px * 0.66, z: gate.uz * 0.75 - gate.pz * 0.66 },
+    { x: gate.px, z: gate.pz },
+    { x: -gate.px, z: -gate.pz },
+  ];
+  let best = null;
+  for (const dir of dirs) {
+    const len = Math.hypot(dir.x, dir.z) || 1;
+    const ux = dir.x / len;
+    const uz = dir.z / len;
+    const inward = ux * gate.ux + uz * gate.uz;
+    for (let step = 14; step <= 80; step += 2) {
+      const x = gate.x + ux * step;
+      const z = gate.z + uz * step;
+      if (!withinPadLimit(x, z, limit)) break;
+      if (!pointInRing(x, z, pts) || edgeDistance(x, z, pts) < 3) break;
+      if (blocked(x, z, colliders, 1.1)) continue;
+      if (Math.hypot(x - parking.x, z - parking.z) < 8) continue;
+      const ranked = inward * 1000 + step;
+      if (!best || ranked > best.ranked) best = { x, z, ranked };
+    }
+  }
+  return best;
+}
+
+function lotInteriorPoint(pts, limit) {
+  const ring = openPts(pts);
+  const near = closestBoundaryPoint(ring, 0, 0);
+  const center = centroidOf(ring);
+  if (
+    pointInRing(center.x, center.z, ring)
+    && withinPadLimit(center.x, center.z, limit)
+    && edgeDistance(center.x, center.z, ring) >= 2
+  ) {
+    return center;
+  }
+  if (!near) return null;
+  const dx = center.x - near.x;
+  const dz = center.z - near.z;
+  const len = Math.hypot(dx, dz) || 1;
+  let best = null;
+  for (let dist = 4; dist <= 48; dist += 1) {
+    const x = near.x + (dx / len) * dist;
+    const z = near.z + (dz / len) * dist;
+    if (!withinPadLimit(x, z, limit)) break;
+    if (!pointInRing(x, z, ring) || edgeDistance(x, z, ring) < 2) continue;
+    best = { x, z };
+  }
+  return best;
 }
 
 /**
@@ -511,13 +583,12 @@ function addParking(parent, lot, project, radius) {
 
   const near = closestBoundaryPoint(pts, 0, 0);
   const c = centroidOf(pts);
-  let marker = { x: c.x, z: c.z };
-  if (near) {
-    const dx = near.x - c.x;
-    const dz = near.z - c.z;
+  const marker = lotInteriorPoint(pts, PARK_PAD_LIMIT);
+  if (marker && near) {
+    const dx = near.x - marker.x;
+    const dz = near.z - marker.z;
     const len = Math.hypot(dx, dz) || 1;
     const yaw = Math.atan2(dx / len, dz / len);
-    marker = { x: near.x + (dx / len) * 1.2, z: near.z + (dz / len) * 1.2 };
     addSign(group, label, marker.x, 1.55, marker.z, yaw, "parking-sign");
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.6, 8), m.sign);
     pole.position.set(marker.x, 1.3, marker.z);
@@ -571,7 +642,7 @@ export function createOpenSpace(osm, parkingLots, project, radius, colliders = [
     if (built.view && !views.parking) views.parking = built.view;
     if (built.marker && built.group.userData.name === "朝陽公園停車場") parkingMarker = built.marker;
   }
-  const quest = planParkWaypoints(parkRing, parkingMarker);
+  const quest = planParkWaypoints(parkRing, parkingMarker, { colliders });
   group.userData = { parkName, parkingName, trees, stalls, quest };
   return { group, views, parkName, parkingName, trees, stalls, quest };
 }

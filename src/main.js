@@ -13,7 +13,7 @@ import { makePavementDetail } from "./textures.js";
 import { createCourtyardFarm } from "./farm.js";
 import { createNear50Inventory, near50CameraPose } from "./near50-inventory.js";
 import { applyFacadeMode, normalizeFacadeMode } from "./facade-atlas-25d.js";
-import { createOpenSpace } from "./open-space.js";
+import { createOpenSpace, PARK_WALK_REACH } from "./open-space.js";
 import {
   STREET_QUESTS,
   advanceQuests,
@@ -24,6 +24,7 @@ import {
   saveQuestProgress,
 } from "./quests.js";
 import { createQuestMarkers } from "./quest-markers.js";
+import { createQuestPads } from "./quest-pads.js";
 import { createNpcs } from "./npcs.js";
 import { createWaysideShrines } from "./worship.js";
 
@@ -182,6 +183,8 @@ async function boot() {
   });
   const questMarkers = createQuestMarkers();
   scene.add(questMarkers.group);
+  const questPads = createQuestPads(questAnchors.park?.waypoints || []);
+  scene.add(questPads.group);
   const streetNpcs = createNpcs(questAnchors.npcs || {});
   scene.add(streetNpcs.group);
   let questProgress = loadQuestProgress(globalThis.localStorage);
@@ -217,6 +220,7 @@ async function boot() {
       questInteractBtn.dataset.quest = affordance?.id || "";
     }
     questMarkers.sync(questMarkerPoints(questProgress, questAnchors), controls.getMode() === "sky");
+    questPads.sync(questProgress.quests.Q4);
     paintDialog(view.dialog);
   }
 
@@ -324,7 +328,7 @@ async function boot() {
   });
 
   const controls = createControls(camera, renderer, {
-    radius: config.radiusMeters,
+    radius: Math.max(config.radiusMeters, PARK_WALK_REACH),
     eyeHeight: config.eyeHeight,
     walkSpeed: config.walkSpeed,
     jumpSpeed: config.jumpSpeed,
@@ -748,8 +752,19 @@ async function boot() {
         name: npc?.name || "",
         x: npc?.x,
         z: npc?.z,
+        range: npc?.range,
         questId: npc?.questId || "",
       })),
+      pads() {
+        return questPads.group.children.map((pad) => ({
+          id: pad.userData.id,
+          label: pad.userData.label,
+          x: pad.position.x,
+          z: pad.position.z,
+          color: pad.userData.material.color.getHexString(),
+          visible: pad.visible,
+        }));
+      },
     },
     openSpace: openSpace.group.userData,
     zhenfu: world.zhenfu || null,

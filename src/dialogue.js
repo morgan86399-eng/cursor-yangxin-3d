@@ -98,7 +98,8 @@ export function applyDialogue(progress, ctx = {}) {
   const officer = npcs.officer;
   const liuNear = q8 && nearPoint(walk, x, z, liu, liu?.range || 3.2);
   const ahuaNear = q9 && nearPoint(walk, x, z, ahua, q9 ? (questOf(quests, "Q9")?.range || ahua?.range || 3) : 3);
-  const uncleNear = q10 && nearPoint(walk, x, z, uncle, uncle?.range || 3.5);
+  const uncleRange = Math.max(4, uncle?.range || 0, questOf(quests, "Q10")?.range || 0);
+  const uncleNear = q10 && nearPoint(walk, x, z, uncle, uncleRange);
   const chenNear = q11 && nearPoint(walk, x, z, chen, chen?.range || 3.2);
   const keeperNear = q12 && nearPoint(walk, x, z, keeper, keeper?.range || 3.2);
   const officerNear = nearPoint(walk, x, z, officer, officer?.range || 3.2);
@@ -250,7 +251,7 @@ export function applyDialogue(progress, ctx = {}) {
   if (q9?.status !== "done" && q9.bag && ahuaNear) pushOffer("Q9", "遞紙袋", "deliver", distance2d(x, z, ahua.x, ahua.z));
   if (q9?.status !== "done" && !q9.bag && marketNear) pushOffer("Q9", "拿紙袋", "pickup", distance2d(x, z, anchors.market.x, anchors.market.z));
   if (q9?.status !== "done" && !q9.bag && ahuaNear) pushOffer("Q9", "詢問", "talk", distance2d(x, z, ahua.x, ahua.z));
-  if (q10?.status !== "done" && uncleNear) pushOffer("Q10", "聽故事", "talk", distance2d(x, z, uncle.x, uncle.z));
+  if (q10?.status !== "done" && uncleNear) pushOffer("Q10", questOf(quests, "Q10")?.action || "聽舊街", "talk", distance2d(x, z, uncle.x, uncle.z));
   if (q11?.status !== "done" && chenNear) pushOffer("Q11", "報名", "talk", distance2d(x, z, chen.x, chen.z));
   if (q12?.status !== "done" && keeperNear) pushOffer("Q12", "請問", "talk", distance2d(x, z, keeper.x, keeper.z));
   offers.sort((a, b) => a.dist - b.dist);

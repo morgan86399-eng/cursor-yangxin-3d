@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createProjector, pointInRing } from "../src/geo.js";
-import { createOpenSpace } from "../src/open-space.js";
+import { createOpenSpace, PARK_WALK_REACH } from "../src/open-space.js";
+import { createQuestPads } from "../src/quest-pads.js";
 import {
   STREET_QUESTS,
   advanceQuests,
@@ -125,18 +126,25 @@ assert.equal(stall.progress.quests.Q3.status, "done");
 assert.equal(stall.completed[0].reward, "心田+6");
 
 book = stall.progress;
-const skipped = stand(book, anchors, 150, 8, { dt: 0.2 });
-assert.equal(skipped.progress.quests.Q4.step, 0, "parking does not count before entering the park");
-assert.equal(skipped.progress.quests.Q4.entered, false);
-const entered = stand(book, anchors, 86, 4);
-assert.equal(entered.progress.quests.Q4.entered, true);
-assert.equal(entered.progress.quests.Q4.step, 1, "the gate is the first waypoint");
-const wrongOrder = stand(entered.progress, anchors, 150, 8);
-assert.equal(wrongOrder.progress.quests.Q4.step, 1, "waypoints stay in order");
-const farSide = stand(entered.progress, anchors, 130, 30);
-assert.equal(farSide.progress.quests.Q4.step, 2);
-const parking = stand(farSide.progress, anchors, 150, 8);
+const awayFromPark = stand(book, anchors, 40, -20);
+assert.match(awayFromPark.objective, /前往朝陽公園/);
+assert.equal(awayFromPark.progress.quests.Q4.step, 0);
+const parkingFirst = stand(book, anchors, 150, 8);
+assert.equal(parkingFirst.progress.quests.Q4.entered, false, "the parking pad lights before the park ring");
+assert.equal(parkingFirst.progress.quests.Q4.step, 1);
+assert.match(parkingFirst.progress.quests.Q4.choice, /parking/);
+assert.match(parkingFirst.objective, /踩亮地上的光圈/);
+assert.match(parkingFirst.objective, /公園入口/);
+const gateLit = stand(parkingFirst.progress, anchors, 86, 4);
+assert.equal(gateLit.progress.quests.Q4.entered, true);
+assert.equal(gateLit.progress.quests.Q4.step, 2);
+assert.match(gateLit.progress.quests.Q4.choice, /gate/);
+const still = stand(gateLit.progress, anchors, 86, 4);
+assert.equal(still.progress.quests.Q4.step, 2, "a lit pad does not count twice");
+const parking = stand(gateLit.progress, anchors, 130, 30);
 assert.equal(parking.progress.quests.Q4.status, "done");
+assert.equal(parking.progress.quests.Q4.step, 3);
+assert.match(parking.progress.quests.Q4.choice, /far/);
 assert.equal(parking.completed[0].reward, "心田+10");
 
 book = parking.progress;
@@ -191,6 +199,13 @@ assert.equal(delivered.progress.quests.Q9.status, "done");
 assert.match(delivered.dialog.text, /收下/);
 
 book = delivered.progress;
+assert.ok(byId.Q10.range >= 4);
+assert.equal(byId.Q10.action, "聽舊街");
+assert.ok(uncle.range >= 4);
+const prompt = stand(book, anchors, uncle.x + 3.8, uncle.z);
+assert.equal(prompt.affordance?.label, "E 聽舊街");
+const outOfReach = stand(book, anchors, uncle.x + 6.2, uncle.z);
+assert.notEqual(outOfReach.affordance?.label, "E 聽舊街");
 const story = stand(book, anchors, uncle.x, uncle.z, { interact: true });
 assert.equal(story.progress.quests.Q10.heard, 1);
 assert.equal(story.progress.quests.Q10.status, "open");
@@ -236,6 +251,10 @@ assert.equal(waiting.progress.quests.Q6.status, "open");
 
 const npcGroup = createNpcs(placed.npcs);
 assert.equal(npcGroup.group.children.length, 6);
+const uncleMesh = npcGroup.group.children.find((child) => child.userData.npcId === "uncle");
+const bench = uncleMesh.children.find((child) => child.name === "npc-bench");
+assert.ok(Math.abs(bench.position.x) >= 0.7, "散步阿伯 stands beside the bench");
+assert.ok(uncleMesh.children.some((child) => child.name === "npc-name" && child.userData.label === "散步阿伯"));
 const npcNames = npcGroup.group.children.map((child) => child.userData.name);
 for (const name of ["劉師父", "廟祝", "阿花", "散步阿伯", "志工小陳", "巡邏警員"]) {
   assert.ok(npcNames.includes(name), name);
@@ -251,6 +270,9 @@ assert.equal(reloaded.quests.Q9.bag, true);
 assert.equal(reloaded.quests.Q10.heard >= 2, true);
 assert.equal(reloaded.quests.Q8.choice, "morning");
 assert.equal(reloaded.quests.Q4.step >= 3, true);
+assert.match(reloaded.quests.Q4.choice, /gate/);
+assert.match(reloaded.quests.Q4.choice, /parking/);
+assert.match(reloaded.quests.Q4.choice, /far/);
 const corrupt = memoryStorage({ "zhenfu-garden-quests-v1": "{" });
 assert.equal(loadQuestProgress(corrupt).quests.Q2.status, "open");
 
@@ -287,9 +309,15 @@ assert.equal(markers.find((point) => point.id === "Q9").x, placed.npcs.ahua.x);
 assert.equal(questMarkerPoints(book, anchors).length, 0);
 const partial = emptyQuestProgress();
 partial.quests.Q1.status = "done";
+partial.quests.Q4.choice = "gate,far";
 partial.quests.Q4.step = 2;
 const q4marker = questMarkerPoints(partial, anchors).find((point) => point.id === "Q4");
 assert.equal(q4marker.x, anchors.park.waypoints[2].x);
+const parkingOnly = emptyQuestProgress();
+parkingOnly.quests.Q4.choice = "parking";
+parkingOnly.quests.Q4.step = 1;
+const nextUnlit = questMarkerPoints(parkingOnly, anchors).find((point) => point.id === "Q4");
+assert.equal(nextUnlit.x, anchors.park.waypoints[0].x);
 
 const osm = JSON.parse(await readFile(join(root, "../public/data/osm-200m.json"), "utf8"));
 const parkingFile = JSON.parse(await readFile(join(root, "../public/data/parking.json"), "utf8"));
@@ -332,6 +360,37 @@ assert.equal(bound.npcs.liu.name, "劉師父");
 assert.equal(bound.npcs.keeper.name, "廟祝");
 assert.equal(bound.npcs.ahua.name, "阿花");
 assert.equal(bound.npcs.uncle.name, "散步阿伯");
+assert.ok(bound.npcs.uncle.range >= 4);
+const walkLimit = PARK_WALK_REACH - 0.8;
+for (const point of bound.park.waypoints) {
+  assert.ok(Math.hypot(point.x, point.z) <= walkLimit, `${point.id} is outside the walk radius`);
+}
+assert.equal(pointInRing(bound.park.waypoints[1].x, bound.park.waypoints[1].z, bound.park.ring), true);
+const lot = parkingFile.lots.find((item) => String(item.operator || item.name || "").includes("朝陽公園"));
+const lotPts = lot.ring.map(([lon, lat]) => project.toLocal(lat, lon));
+assert.equal(pointInRing(bound.park.waypoints[2].x, bound.park.waypoints[2].z, lotPts), true, "parking pad sits inside the lot");
+assert.equal(pointInRing(bound.npcs.uncle.x, bound.npcs.uncle.z, bound.park.ring), true, "散步阿伯 stands inside the park");
+assert.ok(Math.hypot(bound.npcs.uncle.x, bound.npcs.uncle.z) <= walkLimit, "散步阿伯 is outside the walk radius");
+const pads = createQuestPads(bound.park.waypoints);
+assert.equal(pads.group.children.filter((child) => child.name === "quest-pad").length, 3);
+assert.ok(pads.group.children.some((child) => child.userData.id === "parking"));
+pads.sync({ choice: "parking", status: "open" });
+const parkingPad = pads.group.children.find((child) => child.userData.id === "parking");
+const gatePad = pads.group.children.find((child) => child.userData.id === "gate");
+assert.equal(parkingPad.userData.material.color.getHex(), 0x3dff7a);
+assert.equal(gatePad.userData.material.color.getHex(), 0xe2b43a);
+pads.sync({ choice: "gate,far,parking", status: "done" });
+assert.equal(gatePad.userData.material.color.getHex(), 0x3dff7a);
+const q3done = emptyQuestProgress();
+for (const id of ["Q1", "Q2", "Q3"]) q3done.quests[id].status = "done";
+let walked = q3done;
+for (const point of [bound.park.waypoints[2], bound.park.waypoints[0], bound.park.waypoints[1]]) {
+  walked = stand(walked, bound, point.x, point.z).progress;
+}
+assert.equal(walked.quests.Q4.status, "done", "real park pads complete Q4 in any order");
+assert.equal(walked.quests.Q4.step, 3);
+const hearUncle = stand(walked, bound, bound.npcs.uncle.x + 3.6, bound.npcs.uncle.z);
+assert.equal(hearUncle.affordance?.label, "E 聽舊街");
 assert.equal(bound.npcs.chen.name, "志工小陳");
 assert.equal(bound.npcs.officer.name, "巡邏警員");
 assert.ok(Math.hypot(bound.npcs.ahua.x - bound.stall.x, bound.npcs.ahua.z - bound.stall.z) > 3);
