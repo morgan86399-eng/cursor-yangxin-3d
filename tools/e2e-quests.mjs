@@ -121,7 +121,7 @@ try {
       lookZ: shop.lookZ,
     });
   });
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  await waitFor(page, () => document.getElementById("questInteract")?.hidden === false, 20000);
   const hud = await page.evaluate(() => {
     const state = window.__yangxin.getState();
     const shop = window.__yangxin.quests.anchors.yashan;
