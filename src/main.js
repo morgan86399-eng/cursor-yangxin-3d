@@ -8,7 +8,7 @@ import { createDetailedBuildings } from "./buildings.js";
 import { createSigns } from "./signs.js";
 import { createSky, createStreetProps } from "./props.js";
 import { createControls } from "./controls.js";
-import { hitsCollider } from "./player.js";
+import { approachWalkPoint, hitsCollider } from "./player.js";
 import { makePavementDetail } from "./textures.js";
 import { createCourtyardFarm } from "./farm.js";
 import { createNear50Inventory, near50CameraPose } from "./near50-inventory.js";
@@ -457,6 +457,30 @@ async function boot() {
   canvas.addEventListener("pointerleave", () => { lookDrag = null; });
   window.addEventListener("blur", () => { lookDrag = null; });
 
+  let landmarkWalk = null;
+  function showLandmark(cam) {
+    if (!cam || !Number.isFinite(cam.lookX) || !Number.isFinite(cam.lookZ)) return false;
+    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    landmarkWalk = cam;
+    return true;
+  }
+  function enterWalkHere() {
+    if (controls.getMode() === "walk") return;
+    const cam = landmarkWalk;
+    controls.setMode("walk");
+    if (!cam) return;
+    const spot = approachWalkPoint(cam, world.colliders, 0.42);
+    if (!spot) return;
+    controls.setState({
+      x: spot.x,
+      y: 0,
+      z: spot.z,
+      lookX: spot.lookX,
+      lookY: spot.lookY,
+      lookZ: spot.lookZ,
+    });
+  }
+
   const view = initialView === "orbit" ? "sky" : initialView;
   if (view === "top" || view === "sky") {
     controls.setMode("sky", { x: 0, z: 0, height: view === "top" ? 220 : 180 });
@@ -521,31 +545,23 @@ async function boot() {
     );
   } else if ((view === "zhenfu" || view === "zhenfu3q") && world.zhenfu) {
     const cam = view === "zhenfu3q" ? world.zhenfu.threeQuarter : world.zhenfu.front;
-    controls.pose(cam.x, cam.y, cam.z, world.zhenfu.lookX, world.zhenfu.lookY, world.zhenfu.lookZ);
+    showLandmark(cam);
   } else if (view === "corner" && world.landmarkViews?.corner) {
-    const cam = world.landmarkViews.corner;
-    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    showLandmark(world.landmarkViews.corner);
   } else if (view === "station" && world.landmarkViews?.station) {
-    const cam = world.landmarkViews.station;
-    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    showLandmark(world.landmarkViews.station);
   } else if ((view === "chaoyang" || view === "chaoyang-temple") && world.landmarkViews?.chaoyang) {
-    const cam = world.landmarkViews.chaoyang;
-    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    showLandmark(world.landmarkViews.chaoyang);
   } else if ((view === "park" || view === "chaoyang-park") && world.landmarkViews?.park) {
-    const cam = world.landmarkViews.park;
-    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    showLandmark(world.landmarkViews.park);
   } else if ((view === "parking" || view === "chaoyang-parking") && world.landmarkViews?.parking) {
-    const cam = world.landmarkViews.parking;
-    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    showLandmark(world.landmarkViews.parking);
   } else if ((view === "market" || view === "chaoyang-market") && world.landmarkViews?.market) {
-    const cam = world.landmarkViews.market;
-    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    showLandmark(world.landmarkViews.market);
   } else if ((view === "activity" || view === "civic") && world.landmarkViews?.activity) {
-    const cam = world.landmarkViews.activity;
-    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    showLandmark(world.landmarkViews.activity);
   } else if (view === "shrine" && world.landmarkViews?.shrine) {
-    const cam = world.landmarkViews.shrine;
-    controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ);
+    showLandmark(world.landmarkViews.shrine);
   } else if (view === "yashan" || view === "yashan-close") {
     const spot = (world.brandViews || []).find((item) => item.brand === "yashanyuan") || world.brandViews?.[0];
     if (spot) {
@@ -554,11 +570,21 @@ async function boot() {
       const k = view === "yashan-close" ? 0.5 : 1;
       const y = view === "yashan-close" ? 4.8 : spot.y || 6.4;
       const lookY = view === "yashan-close" ? 3.5 : spot.lookY || 4.5;
-      controls.pose(spot.lookX + dx * k, y, spot.lookZ + dz * k, spot.lookX, lookY, spot.lookZ, 60);
+      const cam = {
+        x: spot.lookX + dx * k,
+        y,
+        z: spot.lookZ + dz * k,
+        lookX: spot.lookX,
+        lookY,
+        lookZ: spot.lookZ,
+      };
+      controls.pose(cam.x, cam.y, cam.z, cam.lookX, cam.lookY, cam.lookZ, 60);
+      landmarkWalk = cam;
     }
   } else {
     controls.setMode("sky", { x: 0, z: 0, height: 180 });
   }
+  if (initialParams.get("mode") === "walk") enterWalkHere();
 
   function frameNo46(mode = "normal") {
     const spot = (world.brandViews || []).find((item) => item.brand === "yashanyuan");
@@ -587,12 +613,13 @@ async function boot() {
     if (frameNo46()) setStatus("鎮撫街46號：1樓雅善圓、2樓桃園養心推拿");
   });
   skyBtn.addEventListener("click", () => {
+    landmarkWalk = null;
     controls.setMode("sky", { x: 0, z: 0, height: 180 });
     setStatus("天空俯瞰：拖曳平移、滾輪縮放");
   });
   walkBtn.addEventListener("click", () => {
     setStatus("第一視角：WASD 移動、空白鍵跳躍。撞到建物會停住");
-    controls.setMode("walk");
+    enterWalkHere();
   });
   lockBtn.addEventListener("click", () => controls.setLookLocked(!controls.getState().locked));
 
@@ -770,7 +797,7 @@ async function boot() {
     cameraPos.copy(camera.position);
     controls.update(dt);
     streetNpcs.faceCamera(camera);
-    farm?.update();
+    try { farm?.update(); } catch { /* a failed farm paint must not stop quests */ }
     const interact = questInteractQueued;
     questInteractQueued = false;
     applyQuest(dt, interact);

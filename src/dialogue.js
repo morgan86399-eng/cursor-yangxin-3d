@@ -241,22 +241,22 @@ export function applyDialogue(progress, ctx = {}) {
     };
   }
 
-  if (q8?.status !== "done" && liuNear) {
-    affordance = { id: "Q8", action: "打招呼", label: "E 打招呼", kind: "talk" };
-  } else if (q9?.status !== "done" && q9.bag && ahuaNear) {
-    affordance = { id: "Q9", action: "遞紙袋", label: "E 遞紙袋", kind: "deliver" };
-  } else if (q9?.status !== "done" && !q9.bag && marketNear) {
-    affordance = { id: "Q9", action: "拿紙袋", label: "E 拿紙袋", kind: "pickup" };
-  } else if (q9?.status !== "done" && !q9.bag && ahuaNear) {
-    affordance = { id: "Q9", action: "詢問", label: "E 詢問", kind: "talk" };
-  } else if (q10?.status !== "done" && uncleNear) {
-    affordance = { id: "Q10", action: "聽故事", label: "E 聽故事", kind: "talk" };
-  } else if (q11?.status !== "done" && chenNear) {
-    affordance = { id: "Q11", action: "報名", label: "E 報名", kind: "talk" };
-  } else if (q12?.status !== "done" && keeperNear) {
-    affordance = { id: "Q12", action: "請問", label: "E 請問", kind: "talk" };
-  } else if (officerNear) {
-    affordance = { id: "officer", action: "問候", label: "E 問候", kind: "tip" };
+  const offers = [];
+  const pushOffer = (id, action, kind, dist) => {
+    if (!Number.isFinite(dist)) return;
+    offers.push({ id, action, label: `E ${action}`, kind, dist });
+  };
+  if (q8?.status !== "done" && liuNear) pushOffer("Q8", "打招呼", "talk", distance2d(x, z, liu.x, liu.z));
+  if (q9?.status !== "done" && q9.bag && ahuaNear) pushOffer("Q9", "遞紙袋", "deliver", distance2d(x, z, ahua.x, ahua.z));
+  if (q9?.status !== "done" && !q9.bag && marketNear) pushOffer("Q9", "拿紙袋", "pickup", distance2d(x, z, anchors.market.x, anchors.market.z));
+  if (q9?.status !== "done" && !q9.bag && ahuaNear) pushOffer("Q9", "詢問", "talk", distance2d(x, z, ahua.x, ahua.z));
+  if (q10?.status !== "done" && uncleNear) pushOffer("Q10", "聽故事", "talk", distance2d(x, z, uncle.x, uncle.z));
+  if (q11?.status !== "done" && chenNear) pushOffer("Q11", "報名", "talk", distance2d(x, z, chen.x, chen.z));
+  if (q12?.status !== "done" && keeperNear) pushOffer("Q12", "請問", "talk", distance2d(x, z, keeper.x, keeper.z));
+  offers.sort((a, b) => a.dist - b.dist);
+  if (offers.length) affordance = offers[0];
+  else if (officerNear) {
+    affordance = { id: "officer", action: "問候", label: "E 問候", kind: "tip", dist: distance2d(x, z, officer.x, officer.z) };
   }
 
   if (interact && !consumed && affordance) {
@@ -310,15 +310,17 @@ export function applyDialogue(progress, ctx = {}) {
     affordance = null;
   }
 
-  const currentId = ctx.currentId || "";
-  if (currentId === "Q8" && liuNear) objective = "先跟劉師父說一聲。";
-  else if (currentId === "Q9" && q9?.bag && ahuaNear) objective = "把紙袋遞給阿花。";
-  else if (currentId === "Q9" && marketNear) objective = "市場門口有一袋紙，先拿起來。";
-  else if (currentId === "Q9" && ahuaNear) objective = "紙袋在市場門口，幫我拿過來。";
-  else if (currentId === "Q10" && uncleNear) objective = q10.heard >= 1 ? "還有一句，聽完再走。" : "坐下來聽阿伯說。";
-  else if (currentId === "Q11" && chenNear) objective = "聽完跟志工說一聲。";
-  else if (currentId === "Q12" && keeperNear) objective = q12.heard >= 1 ? "把話收起來再離開。" : "問廟祝一句香火的事。";
+  const shown = affordance?.id || "";
+  if (shown === "Q8") objective = "先跟劉師父說一聲。";
+  else if (shown === "Q9" && q9?.bag) objective = "把紙袋遞給阿花。";
+  else if (shown === "Q9" && affordance?.kind === "pickup") objective = "市場門口有一袋紙，先拿起來。";
+  else if (shown === "Q9") objective = "紙袋在市場門口，幫我拿過來。";
+  else if (shown === "Q10") objective = q10.heard >= 1 ? "還有一句，聽完再走。" : "坐下來聽阿伯說。";
+  else if (shown === "Q11") objective = "聽完跟志工說一聲。";
+  else if (shown === "Q12") objective = q12.heard >= 1 ? "把話收起來再離開。" : "問廟祝一句香火的事。";
+  else if (shown === "officer") objective = progress.quests.Q6?.status === "done" ? "跟巡邏警員問一聲。" : "先到門口報個到。";
 
+  const currentId = ctx.currentId || "";
   const inRange = Boolean(
     (currentId === "Q8" && liuNear)
     || (currentId === "Q9" && (marketNear || ahuaNear))
