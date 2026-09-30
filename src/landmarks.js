@@ -345,8 +345,9 @@ export function dressLandmark(group, pts, roads, spec) {
   if (spec.kind === "police") {
     const span = Math.min(edge.len * 0.72, 10);
     const canopy = new THREE.MeshLambertMaterial({ color: 0xd9ddd8 });
-    const slab = place(edge, 0.5, 1.1);
-    addBox(group, slab.x, 3.35, slab.z, span, 0.16, 2.2, edge.yaw, canopy);
+    const slab = place(edge, 0.5, 1.15);
+    const canopyMesh = addBox(group, slab.x, 3.42, slab.z, span, 0.28, 2.35, edge.yaw, canopy);
+    canopyMesh.userData = { kind: "police-canopy", estimated: true };
     addBoard(group, edge, {
       y: 3.55,
       w: Math.min(span * 0.7, 5.4),
@@ -356,7 +357,17 @@ export function dressLandmark(group, pts, roads, spec) {
       name: "青溪派出所",
     });
     const door = place(edge, 0.5, 0.16);
-    addBox(group, door.x, 1.45, door.z, 2.4, 2.5, 0.08, edge.yaw, new THREE.MeshLambertMaterial({ color: 0x8ea4b0 }));
+    const doorMesh = addBox(group, door.x, 1.45, door.z, 2.4, 2.5, 0.08, edge.yaw, new THREE.MeshLambertMaterial({ color: 0x8ea4b0 }));
+    doorMesh.userData = { kind: "police-door", estimated: true };
+    const jambMat = new THREE.MeshLambertMaterial({ color: 0x9aa3a6 });
+    for (const side of [-1.35, 1.35]) {
+      const jamb = place(edge, 0.5 + side / edge.len, 0.28);
+      const mesh = addBox(group, jamb.x, 1.5, jamb.z, 0.18, 2.85, 0.22, edge.yaw, jambMat);
+      mesh.userData = { kind: "police-door-jamb", estimated: true };
+    }
+    const step = place(edge, 0.5, 0.85);
+    const steps = addBox(group, step.x, 0.12, step.z, 3.2, 0.18, 1.15, edge.yaw, new THREE.MeshLambertMaterial({ color: 0xb7b3ac }));
+    steps.userData = { kind: "police-steps", estimated: true };
     const emblem = new THREE.Mesh(
       new THREE.CircleGeometry(0.42, 16),
       new THREE.MeshLambertMaterial({ color: 0x2c3440 })

@@ -56,6 +56,13 @@
     <div id="cropPicker" class="crop-picker" hidden></div>
   </section>
   <div id="farmSync" class="farm-sync" role="status" aria-live="polite">正在與心田同步…</div>
+  <section id="questPanel" class="quest-panel" aria-label="鎮撫街任務">
+    <h2>街巷任務</h2>
+    <p id="questObjective" class="muted">前往鎮撫街46號。</p>
+    <ol id="questList"></ol>
+    <p id="questToast" role="status"></p>
+  </section>
+  <button id="questInteract" class="quest-interact" type="button" hidden>E 查看</button>
   <div class="mobile-controls" aria-label="行動移動控制">
     <button data-move="w" aria-label="向前">▲</button>
     <button data-move="a" aria-label="向左">◀</button>

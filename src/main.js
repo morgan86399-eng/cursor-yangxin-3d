@@ -14,6 +14,16 @@ import { createCourtyardFarm } from "./farm.js";
 import { createNear50Inventory, near50CameraPose } from "./near50-inventory.js";
 import { applyFacadeMode, normalizeFacadeMode } from "./facade-atlas-25d.js";
 import { createOpenSpace } from "./open-space.js";
+import {
+  STREET_QUESTS,
+  advanceQuests,
+  bindQuestAnchors,
+  grantQuestReward,
+  loadQuestProgress,
+  questMarkerPoints,
+  saveQuestProgress,
+} from "./quests.js";
+import { createQuestMarkers } from "./quest-markers.js";
 import { createWaysideShrines } from "./worship.js";
 
 const statusEl = document.getElementById("status");
@@ -34,6 +44,10 @@ const facadeMixedBtn = document.getElementById("facadeMixedBtn");
 const facade25dBtn = document.getElementById("facade25dBtn");
 const facadeNote = document.getElementById("facadeNote");
 const hintEl = document.getElementById("hint");
+const questListEl = document.getElementById("questList");
+const questObjectiveEl = document.getElementById("questObjective");
+const questToastEl = document.getElementById("questToast");
+const questInteractBtn = document.getElementById("questInteract");
 const crosshairEl = document.getElementById("crosshair");
 const lockHintEl = document.getElementById("lockHint");
 const initialParams = new URLSearchParams(window.location.search);
@@ -155,6 +169,98 @@ async function boot() {
   const signs = createSigns(shops, network.roads, project, config.radiusMeters, world.colliders);
   scene.add(signs.group);
   // The address and focus control live in the HUD; a floating roof billboard distorts street scale.
+
+  const questAnchors = bindQuestAnchors({
+    landmarkViews: world.landmarkViews,
+    brandViews: world.brandViews,
+    parkQuest: openSpace.quest,
+  });
+  const questMarkers = createQuestMarkers();
+  scene.add(questMarkers.group);
+  let questProgress = loadQuestProgress(globalThis.localStorage);
+  let questInteractQueued = false;
+  let questRewardBusy = false;
+  const questRewardQueue = [];
+  const questLook = new THREE.Vector3();
+
+  function paintQuest(view) {
+    if (questObjectiveEl) questObjectiveEl.textContent = view.objective;
+    if (questListEl) {
+      questListEl.replaceChildren();
+      for (const row of view.rows) {
+        const item = document.createElement("li");
+        item.className = row.done ? "is-done" : row.current ? "is-current" : "";
+        const name = document.createElement("strong");
+        name.textContent = `${row.id} ${row.name}`;
+        const status = document.createElement("span");
+        status.textContent = row.done ? `完成 · ${row.reward}` : row.status;
+        item.append(name, status);
+        questListEl.append(item);
+      }
+    }
+    if (questInteractBtn) {
+      const affordance = view.affordance;
+      questInteractBtn.hidden = !affordance;
+      questInteractBtn.textContent = affordance ? affordance.label : "";
+      questInteractBtn.dataset.quest = affordance?.id || "";
+    }
+    questMarkers.sync(questMarkerPoints(questProgress, questAnchors), controls.getMode() === "sky");
+  }
+
+  function applyQuest(dt, interact) {
+    const state = controls.getState();
+    camera.getWorldDirection(questLook);
+    const view = advanceQuests(questProgress, {
+      mode: controls.getMode(),
+      x: state.x,
+      z: state.z,
+      dirX: questLook.x,
+      dirZ: questLook.z,
+      dt,
+      interact,
+      anchors: questAnchors,
+    });
+    questProgress = view.progress;
+    if (view.changed) saveQuestProgress(questProgress, globalThis.localStorage);
+    for (const quest of view.completed) {
+      if (questToastEl) questToastEl.textContent = `${quest.name}完成，${quest.reward}`;
+      questRewardQueue.push(quest);
+    }
+    paintQuest(view);
+    flushQuestRewards();
+    return view;
+  }
+
+  function flushQuestRewards() {
+    if (questRewardBusy) return;
+    questRewardBusy = true;
+    (async () => {
+      try {
+        while (questRewardQueue.length) {
+          const quest = questRewardQueue.shift();
+          const reward = await grantQuestReward(quest);
+          const row = questProgress.quests[quest.id];
+          if (row && row.status === "done") {
+            row.rewardSource = reward.source;
+            row.rewardText = reward.text;
+            saveQuestProgress(questProgress, globalThis.localStorage);
+          }
+        }
+      } finally {
+        questRewardBusy = false;
+      }
+    })();
+  }
+
+  questInteractBtn?.addEventListener("click", () => {
+    questInteractQueued = true;
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.code !== "KeyE" || event.repeat) return;
+    if (controls.getMode() !== "walk") return;
+    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
+    questInteractQueued = true;
+  });
 
   const controls = createControls(camera, renderer, {
     radius: config.radiusMeters,
@@ -539,6 +645,17 @@ async function boot() {
     brandViews: world.brandViews || [],
     neighborViews: world.neighborViews || [],
     landmarkViews: world.landmarkViews || {},
+    quests: {
+      definitions: STREET_QUESTS,
+      anchors: questAnchors,
+      getProgress: () => questProgress,
+      interact() {
+        return applyQuest(0, true);
+      },
+      skyMarkersVisible() {
+        return questMarkers.group.visible && questMarkers.group.children.some((child) => child.visible);
+      },
+    },
     openSpace: openSpace.group.userData,
     zhenfu: world.zhenfu || null,
     farm,
@@ -585,6 +702,9 @@ async function boot() {
     cameraPos.copy(camera.position);
     controls.update(dt);
     farm?.update();
+    const interact = questInteractQueued;
+    questInteractQueued = false;
+    applyQuest(dt, interact);
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
   }

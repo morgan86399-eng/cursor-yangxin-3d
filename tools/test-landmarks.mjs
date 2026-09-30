@@ -100,6 +100,19 @@ assert.equal(lawns, 1);
 assert.ok(paths >= 1, "park paths missing");
 assert.equal(stallMeshes, 1);
 assert.ok(space.views.park && space.views.parking);
+assert.equal(space.quest?.waypoints?.length, 3);
+assert.equal(space.quest.waypoints[2].id, "parking");
+assert.equal(space.quest.waypoints[2].label, "停車場");
+assert.ok(space.quest.waypoints.every((point, index) => space.quest.waypoints.findIndex((other) => Math.hypot(other.x - point.x, other.z - point.z) < 5) === index),
+  "park waypoints must stay far enough apart to be walked in order");
+let parkGates = 0;
+let parkingMarkers = 0;
+space.group.traverse((obj) => {
+  if (obj.name === "park-gate") parkGates += 1;
+  if (obj.name === "parking-marker") parkingMarkers += 1;
+});
+assert.ok(parkGates >= 2, "park entrance should have a gate");
+assert.equal(parkingMarkers, 1);
 assert.ok(Number.isFinite(hall.view.x) && Number.isFinite(space.views.park.lookX));
 
 const marketSpec = marketSpecFor(byName("朝陽市場"));
@@ -108,6 +121,18 @@ assert.ok(marketSpec.height >= 9);
 const marketHall = createMarketHall(toPts(byName("朝陽市場").ring), roads, marketSpec);
 assert.equal(marketHall.group.name, "market-hall");
 assert.equal(inspectLandmarkGroup(marketHall.group).plaqueText, "朝陽市場");
+assert.equal(marketHall.stall?.name, "熟食攤");
+assert.ok(Number.isFinite(marketHall.stall.x) && Number.isFinite(marketHall.stall.z));
+let stallSigns = 0;
+let worshipEntrances = 0;
+marketHall.group.traverse((obj) => {
+  if (obj.name === "market-stall" && obj.userData?.text === "熟食攤") stallSigns += 1;
+});
+hall.group.traverse((obj) => {
+  if (obj.name === "worship-entrance") worshipEntrances += 1;
+});
+assert.ok(stallSigns >= 1, "market needs a readable stall sign");
+assert.ok(worshipEntrances >= 1, "temple entrance should read as a doorway");
 assert.equal(inspectLandmarkGroup(marketHall.group).roofs, 0, "a market is not a temple roof");
 assert.ok(marketHall.collider.height > 8);
 let marketRoofMat = null;
@@ -137,6 +162,9 @@ const worshipColliders = osm.buildings
   .map((b) => ({ plaque: b.name, shops: [b.name], points: toPts(b.ring) }));
 const shrines = createWaysideShrines(osm.pois, project, worshipColliders);
 assert.equal(shrines.count, 1);
+let shrineDoors = 0;
+shrines.group.traverse((obj) => { if (obj.name === "shrine-door") shrineDoors += 1; });
+assert.equal(shrineDoors, 1, "wayside shrine needs a readable door");
 assert.equal(shrines.colliders[0].plaque, "地基主祠");
 assert.equal(shrines.colliders[0].modelRole, "temple");
 let shrineGold = null;

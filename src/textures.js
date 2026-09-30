@@ -646,8 +646,34 @@ export function makePavementDetail() {
 }
 
 export function makeMassingTexture(kind = "apartment") {
-  if (kind === "commercial") return makeUpperFloorTexture("#cbb79a", 6, "house", "tile", true);
-  return makeUpperFloorTexture("#d7d2c8", 4, "house", "concrete", true);
+  const commercial = kind === "commercial";
+  return cached(commercial ? "massing-commercial-v2" : "massing-apartment-v2", () => {
+    const w = 256;
+    const h = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = commercial ? "#cbb79a" : "#d7d2c8";
+    ctx.fillRect(0, 0, w, h);
+    const floors = 4;
+    const band = h / floors;
+    for (let i = 0; i < floors; i++) {
+      const y = i * band;
+      ctx.fillStyle = commercial ? "rgba(92, 68, 42, 0.38)" : "rgba(72, 66, 58, 0.32)";
+      ctx.fillRect(0, y, w, 7);
+      ctx.fillStyle = "rgba(255, 250, 244, 0.42)";
+      ctx.fillRect(0, y + 7, w, 2);
+      ctx.fillStyle = "#6e8794";
+      ctx.fillRect(36, y + 22, 52, 34);
+      ctx.fillRect(168, y + 22, 52, 34);
+      ctx.strokeStyle = "#f7f1e6";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(36, y + 22, 52, 34);
+      ctx.strokeRect(168, y + 22, 52, 34);
+    }
+    return toCanvasTex(canvas, { wrap: true, anisotropy: 8 });
+  });
 }
 
 export function makeUpperFloorTexture(hex, seed = 0, kind = "house", style = "paint", drawOpenings = true) {

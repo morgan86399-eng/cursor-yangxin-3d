@@ -312,6 +312,19 @@ try {
   const aptPlan = facadeDetailPlan("apt", 1);
   assert.equal(aptPlan.balcony, true);
   assert.equal(aptPlan.acUnit, true);
+  assert.equal(aptPlan.awning, false, "apartment massing does not wear a shop awning");
+  const aptFills = [];
+  paintFacadeAtlas({
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
+    fillRect(_x, _y, _w, _h) { aptFills.push(this.fillStyle); },
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+  }, "apt", 5, 0, { paintedSign: false });
+  assert.equal(aptFills.includes("#c44536"), false, "residential atlas must not paint a shop fascia");
   const templePlan = facadeDetailPlan("temple", 1);
   assert.equal(templePlan.acUnit, false);
   assert.equal(templePlan.windowFrames, false);

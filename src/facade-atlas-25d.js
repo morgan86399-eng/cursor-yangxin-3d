@@ -399,6 +399,8 @@ export function paintFacadeAtlas(ctx, kind, floors, variant, options = {}) {
       paintWindow(ctx, 18, y + 10, 28, 32, lit, safeVariant);
       paintWindow(ctx, 52, y + 10, 28, 32, (floor + safeVariant) % 2 === 1, safeVariant);
       if (plan.balcony && floor % 2 === safeVariant % 2) paintBalcony(ctx, y);
+      ctx.fillStyle = "rgba(255, 248, 236, 0.5)";
+      ctx.fillRect(4, y + 4, width - 8, 3);
     }
     if (plan.acUnit && floor > 0 && floor % 2 === (safeVariant % 2)) paintAc(ctx, 78, y + 18);
     if (plan.pipe && floor === safeFloors - 1) paintPipe(ctx, 84, 8, Math.max(12, height - 16));
