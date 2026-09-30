@@ -139,6 +139,7 @@ assert.ok(arcade > 5, `arcades ${arcade}`);
 
 const house = resolveBuildingProfile({ id: "way/1", name: "", building: "apartments", height: 6 });
 assert.equal(house.height, 6);
+assert.equal(house.kind, "apartment");
 
 assert.equal(classifyFacade25d({ building: "temple" }, 1), "temple");
 assert.equal(classifyFacade25d({ building: "government", levels: 3 }, 1), "civic");

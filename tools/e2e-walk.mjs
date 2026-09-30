@@ -9,7 +9,7 @@ import sharp from "sharp";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = process.env.E2E_OUT || "/opt/cursor/artifacts";
 const PORT = process.env.PORT || "5174";
-const URL = process.env.E2E_URL || `http://127.0.0.1:${PORT}/?view=orbit`;
+const URL = process.env.E2E_URL || `http://127.0.0.1:${PORT}/?view=sky`;
 const CHROME = process.env.CHROME || "/usr/local/bin/google-chrome";
 
 async function waitFor(page, fn, timeout = 60000) {
@@ -107,6 +107,26 @@ async function main() {
   });
   assert.ok(ready.count >= 200, `too few buildings ${ready.count}`);
   assert.ok(ready.shopId, "shop lot missing");
+  const skyPose = await page.evaluate(() => window.__yangxin.getView());
+  assert.equal(skyPose.mode, "sky");
+  assert.ok(skyPose.y > 80 && skyPose.dirY < -0.75, `sky camera should look down ${JSON.stringify(skyPose)}`);
+  const nav = await page.evaluate(() => [...document.querySelectorAll(".place-nav a")].map((a) => ({
+    href: a.getAttribute("href"),
+    text: a.textContent,
+    width: a.getBoundingClientRect().width,
+    height: a.getBoundingClientRect().height,
+  })));
+  assert.deepEqual(nav.map((a) => a.href), [
+    "/xintian/house/",
+    "/xintian/",
+    "/xintian/explore/",
+    "/xintian/stage/",
+    "/xintian/parcel/",
+    "/xintian/visit/",
+  ]);
+  assert.ok(nav.every((a) => a.width >= 44 && a.height >= 44), `nav tap targets ${JSON.stringify(nav)}`);
+  assert.equal(await page.$("#orbitBtn"), null);
+  assert.equal(await page.$eval("#skyBtn", (el) => el.textContent), "天空俯瞰");
   assert.ok(ready.uniqueFacades > 80, `facades still cloned ${ready.uniqueFacades}`);
   assert.ok(ready.signCount >= 20, `too few independent signs ${ready.signCount}`);
   assert.ok(ready.signCount < ready.shopList.length, "building-owned signs must not be duplicated as independent signs");
@@ -182,7 +202,7 @@ async function main() {
   assert.match(near50Ui.summary, /31 筆輪廓.*0 筆現況立面校準/);
   await page.screenshot({ path: path.join(OUT, "e2e_near50_inspector.png"), type: "png" });
   await page.click("#near50Close");
-  await page.click("#orbitBtn");
+  await page.click("#skyBtn");
 
   // Reproduce a real visitor's first action: clicking this button leaves it focused.
   await page.click("#walkBtn");
@@ -226,7 +246,7 @@ async function main() {
     assert.ok(Math.hypot(editableEnd.x - editableStart.x, editableEnd.z - editableStart.z) < 0.05,
       `W must not move while typing in ${tag}: ${JSON.stringify({ editableStart, editableEnd })}`);
   }
-  await page.click("#orbitBtn");
+  await page.click("#skyBtn");
 
   const walk = await page.evaluate(() => {
     const y = window.__yangxin;

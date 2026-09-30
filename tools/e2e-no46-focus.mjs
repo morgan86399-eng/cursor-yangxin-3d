@@ -33,12 +33,12 @@ try {
       overflow: document.documentElement.scrollWidth - innerWidth,
       beds: window.__yangxin.farm.beds.length,
       floatingAddressMarkers: window.__yangxin.renderQuality.floatingAddressMarkers,
-      touchTargets: [...document.querySelectorAll("#focusBtn, #walkBtn, [data-move]")]
+      touchTargets: [...document.querySelectorAll("#focusBtn, #skyBtn, #walkBtn, .place-nav a, [data-move]")]
         .filter((el) => el.getClientRects().length > 0)
         .map((el) => ({ id: el.id || el.dataset.move, width: el.getBoundingClientRect().width,
           height: el.getBoundingClientRect().height })),
     }));
-    assert.equal(state.mode, "orbit");
+    assert.equal(state.mode, "sky");
     assert.equal(state.locked, false);
     assert.match(state.status, /鎮撫街46號/);
     assert.equal(state.overflow, 0);

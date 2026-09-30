@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { streetFacingEdge } from "./geo.js";
+import { pointInRing, streetFacingEdge } from "./geo.js";
 
 /**
  * 鎮撫宮以外的宮廟與里活動中心。
@@ -31,6 +31,8 @@ function materials() {
     civicBand: mat("civicBand", 0xb7c3c8),
     civicGlass: mat("civicGlass", 0x6e8c9a),
     civicRoof: mat("civicRoof", 0x8e9390),
+    marketAwning: mat("marketAwning", 0xc4552a),
+    marketWall: mat("marketWall", 0xe6d3b0),
     roof: mat("roof", 0xffffff),
   };
 }
@@ -255,6 +257,16 @@ export function civicSpecFor(b) {
   return { id: b.id, name, height };
 }
 
+export function marketSpecFor(b) {
+  if (!b) return null;
+  const name = String(b.name || "");
+  const amenity = String(b.tags?.amenity || "");
+  if (amenity !== "marketplace" && !/市場/.test(name)) return null;
+  if (!name) return null;
+  const height = Number(b.height) > 4 ? Number(b.height) : 8;
+  return { id: b.id, name, height };
+}
+
 export function createWorshipHall(pts, roads, spec) {
   const edge = streetFacingEdge(pts, roads);
   if (!edge || openCount(pts) < 3) return null;
@@ -403,17 +415,164 @@ export function createCivicHall(pts, roads, spec) {
   };
 }
 
+export function createMarketHall(pts, roads, spec) {
+  const edge = streetFacingEdge(pts, roads);
+  if (!edge || openCount(pts) < 3) return null;
+  const m = materials();
+  const frame = frameFromEdge(edge);
+  const height = spec.height;
+  const group = new THREE.Group();
+  group.name = "market-hall";
+  addPerimeter(group, pts, 0.02, 0.4, m.stone, "market-base");
+  addPerimeter(group, pts, 0.4, 3.35, m.marketWall, "market-walls");
+  if (height > 3.7) addPerimeter(group, pts, 3.35, height - 0.28, m.civicWall, "market-upper");
+  addPerimeter(group, pts, height - 0.28, height, m.civicRoof, "market-roof-edge");
+
+  const n = openCount(pts);
+  if (n >= 3) {
+    const shape = new THREE.Shape();
+    shape.moveTo(pts[0].x, -pts[0].z);
+    for (let i = 1; i < n; i++) shape.lineTo(pts[i].x, -pts[i].z);
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const roof = new THREE.Mesh(geo, m.civicRoof);
+    roof.position.y = height + 0.02;
+    roof.name = "market-roof";
+    group.add(roof);
+  }
+
+  const doorW = Math.min(3.2, Math.max(1.6, edge.len * 0.22));
+  addBox(group, "market-door", [doorW, 2.5, 0.1], 0, 1.3, 0.16, m.dark, frame);
+  const canopyW = Math.min(Math.max(4.2, edge.len * 0.86), 22);
+  addBox(group, "market-canopy", [canopyW, 0.14, 2.4], 0, 3.15, 1.35, m.marketAwning, frame);
+  const plaqueW = Math.min(Math.max(4.4, spec.name.length * 0.55), Math.max(4.4, edge.len * 0.9));
+  addBox(
+    group,
+    "market-plaque",
+    [plaqueW, 0.78, 0.1],
+    0,
+    Math.min(height - 0.7, Math.max(3.7, 4.4)),
+    0.28,
+    plaqueMaterial(spec.name),
+    frame,
+    { role: "plaque", text: spec.name }
+  );
+  const bays = Math.max(2, Math.min(6, Math.round(edge.len / 4.2)));
+  const rows = Math.max(0, Math.min(5, Math.round((height - 4.6) / 3)));
+  for (let floor = 0; floor < rows; floor++) {
+    const y = 5.15 + floor * 2.8;
+    if (y > height - 0.9) break;
+    for (let i = 0; i < bays; i++) {
+      const x = -edge.len * 0.36 + (edge.len * 0.72 * i) / Math.max(1, bays - 1);
+      addBox(group, "market-window", [1.2, 1.15, 0.08], x, y, 0.14, m.civicGlass, frame);
+    }
+  }
+
+  group.userData = { role: "market", name: spec.name, heightEstimated: true };
+  return {
+    group,
+    collider: makeCollider(spec.id, pts, height + 0.04, 3.2),
+    view: viewFrom(edge, Math.max(22, Math.min(36, edge.len * 0.9)), Math.max(10, height * 0.55), height * 0.35),
+  };
+}
+
+export function createWaysideShrine(x, z, name) {
+  const m = materials();
+  const group = new THREE.Group();
+  group.name = "wayside-shrine";
+  group.position.set(x, 0, z);
+  group.rotation.y = Math.atan2(-x, -z);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.36, 1.45), m.stone);
+  base.position.y = 0.18;
+  base.name = "shrine-base";
+  group.add(base);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.28, 1.28, 1.02), m.taoistWall);
+  body.position.y = 1.0;
+  body.name = "shrine-body";
+  group.add(body);
+  const plaque = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.36, 0.06), plaqueMaterial(name));
+  plaque.position.set(0, 1.32, 0.55);
+  plaque.name = "worship-plaque";
+  plaque.userData = { role: "plaque", text: name };
+  group.add(plaque);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.12, 0.52, 4), m.gold);
+  roof.position.y = 1.92;
+  roof.rotation.y = Math.PI / 4;
+  roof.name = "shrine-roof";
+  group.add(roof);
+  for (const side of [-0.72, 0.72]) {
+    const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), m.lantern);
+    lantern.position.set(side, 1.55, 0.72);
+    lantern.name = "worship-lantern";
+    group.add(lantern);
+  }
+  group.userData = { role: "shrine", name, heightEstimated: true };
+  const s = 0.95;
+  const points = [
+    { x: x - s, z: z - s },
+    { x: x + s, z: z - s },
+    { x: x + s, z: z + s },
+    { x: x - s, z: z + s },
+    { x: x - s, z: z - s },
+  ];
+  return {
+    group,
+    collider: {
+      id: `shrine/${name}`,
+      points,
+      minX: x - s,
+      maxX: x + s,
+      minZ: z - s,
+      maxZ: z + s,
+      height: 2.3,
+      storey: 1.6,
+      isShop: false,
+      shops: [name],
+      plaque: name,
+      modelRole: "temple",
+      heightIsEstimated: true,
+    },
+    view: { x: x + 8, y: 6.5, z: z + 8, lookX: x, lookY: 1.3, lookZ: z },
+  };
+}
+
+export function createWaysideShrines(pois, project, colliders = []) {
+  const group = new THREE.Group();
+  group.name = "wayside-shrines";
+  const built = [];
+  const taken = new Set();
+  for (const collider of colliders) {
+    if (collider?.plaque) taken.add(collider.plaque);
+    for (const name of collider?.shops || []) taken.add(name);
+  }
+  for (const poi of pois || []) {
+    if (poi.amenity !== "place_of_worship" || !poi.name || taken.has(poi.name)) continue;
+    const p = project.toLocal(poi.lat, poi.lon);
+    if (colliders.some((collider) => collider.points && pointInRing(p.x, p.z, collider.points))) continue;
+    const shrine = createWaysideShrine(p.x, p.z, poi.name);
+    group.add(shrine.group);
+    built.push(shrine);
+    taken.add(poi.name);
+  }
+  return {
+    group,
+    colliders: built.map((item) => item.collider),
+    views: Object.fromEntries(built.map((item) => [item.collider.plaque, item.view])),
+    count: built.length,
+  };
+}
+
 export function inspectLandmarkGroup(group) {
   const found = { roofs: 0, plaques: 0, lanterns: 0, plaqueText: "", name: group?.name || "", civicRoof: 0 };
   if (!group) return found;
   group.traverse((obj) => {
     if (obj.name === "worship-roof") found.roofs += 1;
-    if (obj.name === "worship-plaque" || obj.name === "civic-plaque") {
+    if (obj.name === "worship-plaque" || obj.name === "civic-plaque" || obj.name === "market-plaque") {
       found.plaques += 1;
       if (obj.userData?.text) found.plaqueText = obj.userData.text;
     }
     if (obj.name === "worship-lantern") found.lanterns += 1;
-    if (obj.name === "civic-roof") found.civicRoof += 1;
+    if (obj.name === "civic-roof" || obj.name === "market-roof") found.civicRoof += 1;
   });
   return found;
 }
