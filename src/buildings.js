@@ -316,6 +316,25 @@ function addRoofFurniture(group, pts, height, seed) {
 
 const arcadeColMat = new THREE.MeshLambertMaterial({ color: 0xc4b8a4 });
 const arcadeCeilMat = new THREE.MeshLambertMaterial({ color: 0xb7aa98 });
+const floorBandMat = new THREE.MeshLambertMaterial({ color: 0xe7e0d4 });
+
+function addFloorRhythm(group, pts, storey, bodyH) {
+  if (!(bodyH > storey + 2.2)) return 0;
+  let y = storey;
+  let bands = 0;
+  while (y < bodyH - 0.35 && bands < 12) {
+    const geo = makeWallGeometry(pts, y - 0.045, y + 0.055, 4.2, 1);
+    if (geo) {
+      const mesh = new THREE.Mesh(geo, floorBandMat);
+      mesh.name = "massing-floor-band";
+      mesh.userData = { kind: "floor-rhythm", estimated: true };
+      group.add(mesh);
+      bands += 1;
+    }
+    y += 3.05;
+  }
+  return bands;
+}
 
 function addArcade(group, pts, roads, storey) {
   const edge = streetFacingEdge(pts, roads);
@@ -657,7 +676,10 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
             recessedWindows: 0,
             projectionOmissions: 0,
           });
-          if (market.name === "朝陽市場") landmarkViews.market = built.view;
+          if (market.name === "朝陽市場") {
+            landmarkViews.market = built.view;
+            if (built.stall) landmarkViews.marketStall = built.stall;
+          }
           continue;
         }
       }
@@ -926,6 +948,7 @@ export function createDetailedBuildings(osm, config, project, edits, roofMat, fr
         facadeStats.atlas25dStreetFaces += atlasEdgeSet.size;
       }
       if (capGeo) group.add(new THREE.Mesh(capGeo, wallMat(makeMetalCapTexture(color, seed))));
+      if (massing && lot.nearDetail) addFloorRhythm(group, pts, storey, bodyH);
     }
     addAerialRoof(group, pts, height, roofMat, frame.uvAt);
     addParapet(group, pts, height, color);

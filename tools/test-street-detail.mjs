@@ -381,6 +381,13 @@ brickGroup.traverse((obj) => {
   if (obj.userData?.kind) brickKinds.push(obj.userData.kind);
 });
 assert.ok(shutterKinds.includes("shutter"), "left neighbor shutter missing");
+assert.ok(shutterKinds.includes("arcade-column"), "48號騎樓柱");
+assert.ok(shutterGroup.getObjectByName("near50-drainpipe"), "48號排水管接頭");
+const nearFrontKinds = [];
+actualShopGroup.traverse((obj) => { if (obj.userData?.kind) nearFrontKinds.push(obj.userData.kind); });
+assert.ok(nearFrontKinds.includes("arcade-column"), "46號騎樓柱");
+assert.ok(nearFrontKinds.includes("awning"), "46號雨遮要有厚度");
+assert.ok(actualShopGroup.getObjectByName("near50-drainpipe"), "46號排水管接頭");
 assert.ok(brickKinds.includes("food-case"), "right neighbor food case missing");
 assert.ok(brickKinds.includes("awning"), "right neighbor awning missing");
 assert.ok(dressOwnsShopSign({ name: "養心推拿" }));

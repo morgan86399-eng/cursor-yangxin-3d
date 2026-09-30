@@ -275,8 +275,8 @@ export function createWorshipHall(pts, roads, spec) {
   const ext = extentInFrame(pts, frame);
   const width = Math.max(6, ext.maxX - ext.minX);
   const depth = Math.max(6, ext.maxZ - ext.minZ);
-  const wallTop = spec.tradition === "buddhist" ? 5.1 : 4.85;
-  const rise = Math.min(3.4, Math.max(1.55, Math.min(width, depth) * 0.16));
+  const wallTop = spec.tradition === "buddhist" ? 5.4 : 5.15;
+  const rise = Math.min(3.8, Math.max(1.9, Math.min(width, depth) * 0.18));
   const group = new THREE.Group();
   group.name = "worship-hall";
   const wallMat = spec.tradition === "buddhist" ? m.buddhistWall : m.taoistWall;
@@ -286,7 +286,15 @@ export function createWorshipHall(pts, roads, spec) {
   const half = Math.min(edge.len, width) / 2;
   const doorW = Math.min(2.4, Math.max(1.35, edge.len * 0.22));
   addBox(group, "worship-door", [doorW, 2.7, 0.12], 0, 0.72 + 1.35, 0.16, m.dark, frame);
+  addBox(group, "worship-entrance", [doorW + 0.42, 3.05, 0.1], 0, 0.72 + 1.45, 0.28, m.gold, frame);
   addBox(group, "", [doorW + 0.28, 0.16, 0.16], 0, 0.72 + 2.78, 0.18, m.gold, frame);
+  for (const side of [-1, 1]) {
+    addBox(group, "worship-entrance", [0.28, 3.15, 0.28], side * (doorW / 2 + 0.32), 1.7, 0.55, m.stone, frame);
+  }
+  const censer = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.36, 0.42, 8), m.gold);
+  censer.position.copy(frame.place(0, 0.55, 1.85));
+  censer.name = "worship-censer";
+  group.add(censer);
   const plaqueW = Math.min(Math.max(3.2, spec.name.length * 0.72), Math.max(3.2, edge.len * 0.86));
   addBox(
     group,
@@ -336,6 +344,8 @@ export function createWorshipHall(pts, roads, spec) {
   }
 
   addBox(group, "worship-steps", [Math.min(edge.len * 0.7, 6.5), 0.18, 1.15], 0, 0.1, 0.85, m.stone, frame);
+  addBox(group, "worship-steps", [Math.min(edge.len * 0.5, 4.4), 0.16, 0.7], 0, 0.28, 1.45, m.stone, frame);
+  addBox(group, "worship-eave", [Math.min(edge.len * 0.96, width + 0.6), 0.16, 0.72], 0, wallTop + 0.22, 0.55, m.gold, frame);
 
   const peak = roof.peak + 0.45;
   group.userData = {
@@ -382,6 +392,11 @@ export function createCivicHall(pts, roads, spec) {
 
   const doorW = Math.min(2.6, Math.max(1.4, edge.len * 0.18));
   addBox(group, "civic-door", [doorW, 2.4, 0.1], 0, 1.25, 0.14, m.civicGlass, frame);
+  addBox(group, "civic-entrance", [doorW + 0.36, 2.7, 0.08], 0, 1.35, 0.22, m.civicBand, frame);
+  for (const side of [-1, 1]) {
+    addBox(group, "civic-entrance", [0.22, 2.7, 0.22], side * (doorW / 2 + 0.28), 1.35, 0.4, m.stone, frame);
+  }
+  addBox(group, "civic-steps", [Math.min(edge.len * 0.42, 5.2), 0.16, 1.2], 0, 0.1, 0.9, m.stone, frame);
   const plaqueW = Math.min(Math.max(4.2, spec.name.length * 0.48), Math.max(4.2, edge.len * 0.92));
   const plaqueY = Math.min(height - 0.7, Math.max(3.15, height * 0.62));
   addBox(
@@ -443,8 +458,24 @@ export function createMarketHall(pts, roads, spec) {
 
   const doorW = Math.min(3.2, Math.max(1.6, edge.len * 0.22));
   addBox(group, "market-door", [doorW, 2.5, 0.1], 0, 1.3, 0.16, m.dark, frame);
+  addBox(group, "market-entrance", [doorW + 0.4, 2.85, 0.08], 0, 1.4, 0.24, m.marketAwning, frame);
   const canopyW = Math.min(Math.max(4.2, edge.len * 0.86), 22);
-  addBox(group, "market-canopy", [canopyW, 0.14, 2.4], 0, 3.15, 1.35, m.marketAwning, frame);
+  addBox(group, "market-canopy", [canopyW, 0.26, 2.8], 0, 3.2, 1.5, m.marketAwning, frame);
+  const stallX = Math.max(2.2, Math.min(edge.len * 0.32, 8));
+  const stall = frame.place(stallX, 0, 2.7);
+  addBox(group, "market-stall", [1.7, 0.9, 0.72], stallX, 0.5, 2.7, m.marketWall, frame);
+  addBox(group, "market-stall", [1.9, 0.1, 1.15], stallX, 1.55, 2.85, m.marketAwning, frame);
+  addBox(
+    group,
+    "market-stall",
+    [1.35, 0.42, 0.06],
+    stallX,
+    1.95,
+    3.15,
+    plaqueMaterial("熟食攤"),
+    frame,
+    { role: "stall", text: "熟食攤" }
+  );
   const plaqueW = Math.min(Math.max(4.4, spec.name.length * 0.55), Math.max(4.4, edge.len * 0.9));
   addBox(
     group,
@@ -473,6 +504,7 @@ export function createMarketHall(pts, roads, spec) {
     group,
     collider: makeCollider(spec.id, pts, height + 0.04, 3.2),
     view: viewFrom(edge, Math.max(22, Math.min(36, edge.len * 0.9)), Math.max(10, height * 0.55), height * 0.35),
+    stall: { x: stall.x, z: stall.z, name: "熟食攤" },
   };
 }
 
@@ -486,8 +518,8 @@ export function createWaysideShrine(x, z, name) {
   base.position.y = 0.18;
   base.name = "shrine-base";
   group.add(base);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.28, 1.28, 1.02), m.taoistWall);
-  body.position.y = 1.0;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.28, 1.48, 1.02), m.taoistWall);
+  body.position.y = 1.1;
   body.name = "shrine-body";
   group.add(body);
   const plaque = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.36, 0.06), plaqueMaterial(name));
@@ -495,11 +527,23 @@ export function createWaysideShrine(x, z, name) {
   plaque.name = "worship-plaque";
   plaque.userData = { role: "plaque", text: name };
   group.add(plaque);
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.12, 0.52, 4), m.gold);
-  roof.position.y = 1.92;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.38, 0.78, 4), m.gold);
+  roof.position.y = 2.15;
   roof.rotation.y = Math.PI / 4;
   roof.name = "shrine-roof";
   group.add(roof);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.78, 0.06), m.dark);
+  door.position.set(0, 1.02, 0.54);
+  door.name = "shrine-door";
+  group.add(door);
+  const steps = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.16, 0.48), m.stone);
+  steps.position.set(0, 0.1, 0.95);
+  steps.name = "shrine-steps";
+  group.add(steps);
+  const porch = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.08, 0.42), m.gold);
+  porch.position.set(0, 1.55, 0.62);
+  porch.name = "shrine-porch";
+  group.add(porch);
   for (const side of [-0.72, 0.72]) {
     const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), m.lantern);
     lantern.position.set(side, 1.55, 0.72);
@@ -524,7 +568,7 @@ export function createWaysideShrine(x, z, name) {
       maxX: x + s,
       minZ: z - s,
       maxZ: z + s,
-      height: 2.3,
+      height: 2.6,
       storey: 1.6,
       isShop: false,
       shops: [name],

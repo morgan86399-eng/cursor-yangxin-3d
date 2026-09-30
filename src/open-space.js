@@ -1,6 +1,40 @@
 import * as THREE from "three";
 import { distanceToRing, pointInRing } from "./geo.js";
 
+export function planParkWaypoints(ring, parking) {
+  const pts = openPts(ring);
+  if (pts.length < 3 || !Number.isFinite(parking?.x) || !Number.isFinite(parking?.z)) return null;
+  const boundary = closestBoundaryPoint(pts, 0, 0);
+  const center = centroidOf(pts);
+  if (!boundary) return null;
+  const dx = center.x - boundary.x;
+  const dz = center.z - boundary.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const ux = dx / len;
+  const uz = dz / len;
+  let gate = { x: boundary.x + ux * 4, z: boundary.z + uz * 4 };
+  if (!pointInRing(gate.x, gate.z, pts)) gate = { x: center.x, z: center.z };
+  let far = { x: center.x, z: center.z };
+  for (let step = 8; step <= 140; step += 4) {
+    const x = center.x + ux * step;
+    const z = center.z + uz * step;
+    if (!pointInRing(x, z, pts) || edgeDistance(x, z, pts) < 4) break;
+    if (Math.hypot(x - gate.x, z - gate.z) >= 12) far = { x, z };
+  }
+  if (Math.hypot(far.x - gate.x, far.z - gate.z) < 12) {
+    const alt = { x: center.x - ux * Math.min(10, len * 0.35), z: center.z - uz * Math.min(10, len * 0.35) };
+    far = pointInRing(alt.x, alt.z, pts) ? alt : { x: center.x, z: center.z };
+  }
+  return {
+    ring: pts.map((point) => ({ x: point.x, z: point.z })),
+    waypoints: [
+      { id: "gate", label: "公園入口", x: gate.x, z: gate.z },
+      { id: "far", label: "公園另一側", x: far.x, z: far.z },
+      { id: "parking", label: "停車場", x: parking.x, z: parking.z },
+    ],
+  };
+}
+
 /**
  * 朝陽公園與朝陽公園平面停車場。
  * 公園框是 OSM leisure=park（name 朝陽森林公園；桃園區公所導覽稱朝陽公園）。
@@ -369,12 +403,27 @@ function addPark(parent, green, project, radius, colliders) {
     const dx = c.x - near.x;
     const dz = c.z - near.z;
     const len = Math.hypot(dx, dz) || 1;
-    const sx = near.x + (dx / len) * 4.2;
-    const sz = near.z + (dz / len) * 4.2;
+    const ux = dx / len;
+    const uz = dz / len;
+    const sx = near.x + ux * 4.2;
+    const sz = near.z + uz * 4.2;
     if (pointInRing(sx, sz, pts)) {
-      const yaw = Math.atan2(-(dx / len), -(dz / len));
+      const yaw = Math.atan2(-ux, -uz);
       addSign(group, label, sx, 1.7, sz, yaw, "park-sign");
     }
+    const px = -uz;
+    const pz = ux;
+    for (const side of [-1.55, 1.55]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.24, 2.35, 0.24), m.sign);
+      post.position.set(near.x + px * side, 1.18, near.z + pz * side);
+      post.name = "park-gate";
+      group.add(post);
+    }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.16, 0.18), m.sign);
+    beam.position.set(near.x, 2.28, near.z);
+    beam.rotation.y = Math.atan2(px, pz);
+    beam.name = "park-gate";
+    group.add(beam);
   }
 
   group.userData = {
@@ -396,7 +445,7 @@ function addPark(parent, green, project, radius, colliders) {
     lookZ: focus.z - 6,
   };
   parent.add(group);
-  return { group, view };
+  return { group, view, ring: pts };
 }
 
 function addParking(parent, lot, project, radius) {
@@ -462,12 +511,19 @@ function addParking(parent, lot, project, radius) {
 
   const near = closestBoundaryPoint(pts, 0, 0);
   const c = centroidOf(pts);
+  let marker = { x: c.x, z: c.z };
   if (near) {
     const dx = near.x - c.x;
     const dz = near.z - c.z;
     const len = Math.hypot(dx, dz) || 1;
     const yaw = Math.atan2(dx / len, dz / len);
-    addSign(group, label, near.x + (dx / len) * 1.2, 1.55, near.z + (dz / len) * 1.2, yaw, "parking-sign");
+    marker = { x: near.x + (dx / len) * 1.2, z: near.z + (dz / len) * 1.2 };
+    addSign(group, label, marker.x, 1.55, marker.z, yaw, "parking-sign");
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.6, 8), m.sign);
+    pole.position.set(marker.x, 1.3, marker.z);
+    pole.name = "parking-marker";
+    pole.userData = { role: "parking", text: label, estimated: true };
+    group.add(pole);
   }
   group.userData = {
     name: label,
@@ -486,7 +542,7 @@ function addParking(parent, lot, project, radius) {
     lookZ: c.z,
   };
   parent.add(group);
-  return { group, view, stalls };
+  return { group, view, stalls, marker };
 }
 
 export function createOpenSpace(osm, parkingLots, project, radius, colliders = []) {
@@ -497,12 +553,15 @@ export function createOpenSpace(osm, parkingLots, project, radius, colliders = [
   let stalls = 0;
   let parkName = "";
   let parkingName = "";
+  let parkRing = null;
+  let parkingMarker = null;
   for (const green of osm?.greens || []) {
     const built = addPark(group, green, project, radius, colliders);
     if (!built) continue;
     parkName = built.group.userData.name;
     trees += built.group.userData.trees || 0;
     if (built.view) views.park = built.view;
+    if (built.ring && built.group.userData.name === "朝陽公園") parkRing = built.ring;
   }
   for (const lot of parkingLots || []) {
     const built = addParking(group, lot, project, radius);
@@ -510,7 +569,9 @@ export function createOpenSpace(osm, parkingLots, project, radius, colliders = [
     parkingName = built.group.userData.name;
     stalls += built.stalls || 0;
     if (built.view && !views.parking) views.parking = built.view;
+    if (built.marker && built.group.userData.name === "朝陽公園停車場") parkingMarker = built.marker;
   }
-  group.userData = { parkName, parkingName, trees, stalls };
-  return { group, views, parkName, parkingName, trees, stalls };
+  const quest = planParkWaypoints(parkRing, parkingMarker);
+  group.userData = { parkName, parkingName, trees, stalls, quest };
+  return { group, views, parkName, parkingName, trees, stalls, quest };
 }

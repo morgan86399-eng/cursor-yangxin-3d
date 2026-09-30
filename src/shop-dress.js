@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { streetFacingEdge } from "./geo.js";
 import { brandOf, isChainStore } from "./brands.js";
+import { createDrainpipeDetail } from "./drainpipe-detail.js";
 import {
   makeShopSignTexture,
   makeYashanyuanFasciaTexture,
@@ -452,10 +453,11 @@ function dressYashanFront(group, edge, storey, layout) {
   const lintelY = layout.ground.y + layout.ground.h / 2 + 0.18;
   const beam = placeOnEdge(edge, 0.52, 0.16);
   addBox(group, beam.x, lintelY, beam.z, span * 0.86, 0.22, 0.16, edge.yaw, wood);
-  const canopy = placeOnEdge(edge, 0.52, 0.55);
-  addBox(group, canopy.x, lintelY + 0.12, canopy.z, span * 0.82, 0.09, 0.64, edge.yaw, bronze);
-  const canopyEdge = placeOnEdge(edge, 0.52, 0.91);
-  addBox(group, canopyEdge.x, lintelY + 0.085, canopyEdge.z, span * 0.78, 0.035, 0.03, edge.yaw, warm);
+  const canopy = placeOnEdge(edge, 0.52, 0.62);
+  const canopyMesh = addBox(group, canopy.x, lintelY + 0.16, canopy.z, span * 0.84, 0.18, 0.92, edge.yaw, bronze);
+  canopyMesh.userData = { kind: "awning", address: "鎮撫街46號", estimated: true };
+  const canopyEdge = placeOnEdge(edge, 0.52, 1.08);
+  addBox(group, canopyEdge.x, lintelY + 0.08, canopyEdge.z, span * 0.8, 0.05, 0.045, edge.yaw, warm);
 
   const glassY = (lintelY - 0.2) * 0.48;
   const glassH = lintelY - 0.28;
@@ -482,7 +484,7 @@ function dressYashanFront(group, edge, storey, layout) {
     // aperture and set its pane behind the frame, in front of the dark recess.
     for (const side of [-1, 1]) {
       const jamb = placeOnEdge(edge, t + side * (winW / 2 + 0.02) / edge.len, 0.18);
-      const jambMesh = addBox(group, jamb.x, glassY, jamb.z, 0.04, glassH * 0.86, 0.07, edge.yaw, frameMat);
+      const jambMesh = addBox(group, jamb.x, glassY, jamb.z, 0.06, glassH * 0.86, 0.09, edge.yaw, frameMat);
       const rail = placeOnEdge(edge, t, 0.18);
       const railMesh = addBox(group, rail.x, glassY + side * glassH * 0.43, rail.z,
         winW + 0.08, 0.04, 0.07, edge.yaw, frameMat);
@@ -554,7 +556,8 @@ function dressYashanFront(group, edge, storey, layout) {
     w: bannerW,
     h: layout.ground.h,
     t: 0.55,
-    out: 0.42,
+    out: 0.48,
+    depth: 0.18,
     floor: 1,
     name: "雅善圓蔬食館",
     tex: makeYashanyuanFasciaTexture(bannerW / layout.ground.h),
@@ -574,14 +577,14 @@ function dressYashanFront(group, edge, storey, layout) {
   const plaqueT = 0.55;
   const plaque = placeOnEdge(edge, plaqueT, 0.28);
   const plaqueRim = new THREE.Mesh(
-    new THREE.BoxGeometry(plaqueW + 0.08, layout.upper.h + 0.08, 0.09),
+    new THREE.BoxGeometry(plaqueW + 0.08, layout.upper.h + 0.08, 0.18),
     new THREE.MeshLambertMaterial({ color: 0x5b3927 })
   );
   plaqueRim.position.set(plaque.x, layout.upper.y, plaque.z);
   plaqueRim.rotation.y = edge.yaw;
   group.add(plaqueRim);
   const plaqueMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(plaqueW, layout.upper.h, 0.06),
+    new THREE.BoxGeometry(plaqueW, layout.upper.h, 0.14),
     new THREE.MeshBasicMaterial({ map: makeYangxinPlaqueTexture(), toneMapped: false })
   );
   const plaqueFace = placeOnEdge(edge, plaqueT, 0.34);
@@ -640,6 +643,24 @@ function dressYashanFront(group, edge, storey, layout) {
   addNo46RecessedWindow(group, edge, 0.55, railY + 1.15, topWindowW, 1.05);
   if (nearHero) addEstimatedFrontSeam(group, edge, 0.55, railY + 1.15 + 1.05 / 2 + 0.06,
     topWindowW + 0.12, 0.035, 0.18, stone, "46-top-window-head");
+
+  if (nearHero) {
+    for (const t of [0.18, 0.86]) {
+      const pier = placeOnEdge(edge, t, 1.05);
+      const column = addBox(group, pier.x, 1.28, pier.z, 0.28, 2.5, 0.28, edge.yaw, stone);
+      column.userData = { kind: "arcade-column", address: "鎮撫街46號", estimated: true };
+      const base = placeOnEdge(edge, t, 1.05);
+      addBox(group, base.x, 0.08, base.z, 0.4, 0.16, 0.4, edge.yaw, stone);
+      const capital = placeOnEdge(edge, t, 1.05);
+      addBox(group, capital.x, 2.58, capital.z, 0.38, 0.1, 0.38, edge.yaw, bronze);
+    }
+    const pipe = createDrainpipeDetail(9.9, "nlsc/414");
+    if (pipe) {
+      const at = placeOnEdge(edge, 0.04, 0.18);
+      pipe.position.set(at.x, 0, at.z);
+      group.add(pipe);
+    }
+  }
 
   return { fascia: 2, extras: 0 };
 }
@@ -847,6 +868,23 @@ function dressShutterNeighbor(group, edge, floorH, bodyH) {
   leaf.position.set(pot.x, 0.55, pot.z);
   group.add(leaf);
   addPaperLantern(group, edge, 0.86, floorH - 0.15, 0.4);
+  const lintel = placeOnEdge(edge, 0.5, 0.62);
+  const awning = addBox(group, lintel.x, floorH * 0.82, lintel.z, span * 0.96, 0.18, 1.05, edge.yaw,
+    new THREE.MeshLambertMaterial({ color: 0xc5ced4 }));
+  awning.userData = { kind: "awning", address: "鎮撫街48號", estimated: true };
+  if (isNearSign(edge)) {
+    for (const t of [0.14, 0.86]) {
+      const pier = placeOnEdge(edge, t, 0.95);
+      const column = addBox(group, pier.x, floorH * 0.4, pier.z, 0.26, floorH * 0.78, 0.26, edge.yaw, metal);
+      column.userData = { kind: "arcade-column", address: "鎮撫街48號", estimated: true };
+    }
+    const pipe = createDrainpipeDetail(bodyH || 14.6, "nlsc/410");
+    if (pipe) {
+      const at = placeOnEdge(edge, 0.96, 0.16);
+      pipe.position.set(at.x, 0, at.z);
+      group.add(pipe);
+    }
+  }
   let y = floorH + 1.35;
   let guard = 0;
   while (y < (bodyH || floorH + 6) - 0.8 && guard < 4) {

@@ -164,6 +164,65 @@ button.is-on, button:hover { background: var(--accent); border-color: transparen
 .crop-picker button:disabled { opacity: .55; }
 .crop-picker[hidden] { display: none; }
 .farm-sync { position: fixed; right: 12px; top: 12px; z-index: 4; padding: 8px 12px; border-radius: 999px; background: rgba(24,16,10,.72); font-size: 12px; }
+.quest-panel {
+  position: fixed;
+  right: 12px;
+  top: 52px;
+  z-index: 4;
+  width: min(248px, calc(100vw - 24px));
+  max-height: min(42vh, 320px);
+  overflow: auto;
+  padding: 10px 12px 8px;
+  border-radius: 14px;
+  background: rgba(24, 16, 10, .78);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
+}
+.quest-panel h2 { margin: 0 0 4px; font-size: 14px; letter-spacing: .04em; }
+.quest-panel .muted { margin: 0 0 6px; color: #f0e2c8; font-size: 12px; line-height: 1.45; }
+.quest-panel ol { margin: 0; padding: 0; list-style: none; }
+.quest-panel li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: #d9cbb6;
+  border-top: 1px solid rgba(246, 234, 214, .12);
+}
+.quest-panel li.is-current { color: #fff6e4; font-weight: 700; }
+.quest-panel li.is-done { color: #c9e2c4; }
+.quest-panel li span { flex: none; }
+#questToast { min-height: 1.2em; margin: 6px 0 0; font-size: 12px; color: #ffe1a8; }
+.quest-interact {
+  position: fixed;
+  left: 50%;
+  bottom: 78px;
+  transform: translateX(-50%);
+  z-index: 5;
+  min-width: 148px;
+  font-weight: 700;
+  background: #e2b43a;
+  color: #1c120a;
+  border-color: transparent;
+}
+.quest-interact[hidden] { display: none; }
+.quest-dialog {
+  position: fixed;
+  left: 50%;
+  bottom: 132px;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: min(420px, calc(100vw - 24px));
+  padding: 12px 14px 10px;
+  border-radius: 16px;
+  background: rgba(24, 16, 10, .92);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+}
+.quest-dialog[hidden] { display: none; }
+.quest-dialog h3 { margin: 0 0 6px; font-size: 15px; }
+.quest-dialog p { margin: 0 0 10px; font-size: 14px; line-height: 1.5; color: #fff6e4; }
+.quest-dialog div { display: flex; flex-wrap: wrap; gap: 8px; }
+.quest-dialog button { min-height: 40px; background: #e2b43a; color: #1c120a; border-color: transparent; font-weight: 700; }
 .farm-sync.is-ready { background: rgba(28, 72, 48, .9); }
 .farm-sync.is-guest { background: rgba(92, 62, 28, .92); }
 .farm-sync.is-offline { background: rgba(122, 42, 32, .92); }
@@ -208,6 +267,8 @@ button.is-on, button:hover { background: var(--accent); border-color: transparen
   #lockHint, #lockHint.is-on { display: none; }
   .actions { margin-top: 6px; }
   .farm-sync { top: 184px; bottom: auto; left: 50%; right: auto; transform: translateX(-50%); white-space: nowrap; }
+  .quest-panel { top: auto; bottom: 118px; left: 8px; right: 8px; width: auto; max-height: 26vh; }
+  .quest-interact { bottom: 168px; }
   .mobile-controls { position: fixed; left: 14px; bottom: 54px; z-index: 5; display: grid; grid-template-columns: repeat(3, 48px); gap: 5px; }
   .mobile-controls button { width: 48px; height: 48px; padding: 0; background: rgba(24,16,10,.72); touch-action: none; }
   .mobile-controls button:first-child { grid-column: 2; }
