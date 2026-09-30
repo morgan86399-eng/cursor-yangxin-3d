@@ -16,6 +16,7 @@ import {
   saveQuestProgress,
   withNpcs,
 } from "../src/quests.js";
+import { approachWalkPoint, hitsCollider } from "../src/player.js";
 import { Q10_LINES } from "../src/dialogue.js";
 import { createNpcs } from "../src/npcs.js";
 import { createMarketHall, createWaysideShrine, createWorshipHall, marketSpecFor, worshipSpecFor } from "../src/worship.js";
@@ -95,14 +96,18 @@ book = emptyQuestProgress();
 const lookedAway = stand(book, anchors, 0, -4, { dirX: 1, dirZ: 0, dt: 3 });
 assert.equal(lookedAway.progress.quests.Q1.status, "open", "facing away must not finish Q1");
 assert.equal(lookedAway.progress.quests.Q1.face, 0);
-const pressed = stand(book, anchors, 2, 2, { interact: true });
+const pressed = stand(book, anchors, 0, -3, { interact: true });
 assert.equal(pressed.progress.quests.Q1.status, "done", "interact path completes Q1 inside 8m");
-assert.equal(pressed.affordance?.id, "Q8", "劉師父 is beside the door, so the greeting is next");
+assert.equal(pressed.affordance, null);
+const greetEarly = stand(emptyQuestProgress(), anchors, 2, 2, { interact: true });
+assert.equal(greetEarly.progress.quests.Q1.status, "open", "standing on 劉師父 does not require Q1 first");
+assert.equal(greetEarly.dialog?.name, "劉師父");
+assert.equal(greetEarly.progress.quests.Q8.status, "open");
 const tooFar = stand(emptyQuestProgress(), anchors, 0, -9, { interact: true });
 assert.equal(tooFar.progress.quests.Q1.status, "open");
 
 book = pressed.progress;
-const templeFar = stand(book, anchors, 30, 8, { interact: true });
+const templeFar = stand(book, anchors, 30, 10, { interact: true });
 assert.equal(templeFar.progress.quests.Q2.status, "open");
 const temple = stand(book, anchors, 30, 4, { interact: true });
 assert.equal(temple.progress.quests.Q2.status, "done");
@@ -262,10 +267,18 @@ const localReward = await grantQuestReward(byId.Q7, { scope: {} });
 assert.equal(localReward.source, "local");
 assert.equal(localReward.text, "心田+8");
 const refused = await grantQuestReward(byId.Q5, {
-  grantHeart: async () => { throw new Error("offline"); },
+  grantHeart: async () => { throw new Error("連線失敗，請重新同步"); },
 });
 assert.equal(refused.source, "local");
 assert.equal(refused.text, "心田+5");
+const offlineBook = emptyQuestProgress();
+offlineBook.quests.Q1.status = "done";
+const offlineWorship = stand(offlineBook, anchors, 30, 4, { interact: true });
+assert.equal(offlineWorship.progress.quests.Q2.status, "done");
+const offlineStore = memoryStorage();
+saveQuestProgress(offlineWorship.progress, offlineStore);
+assert.equal(loadQuestProgress(offlineStore).quests.Q2.status, "done", "farm sync failure still keeps Q2 in localStorage");
+assert.match(loadQuestProgress(offlineStore).quests.Q2.rewardText, /心田/);
 
 const markers = questMarkerPoints(emptyQuestProgress(), anchors);
 assert.equal(markers.length, 12);
@@ -327,6 +340,26 @@ assert.equal(pointInRing(bound.park.waypoints[0].x, bound.park.waypoints[0].z, b
 const live = stand(emptyQuestProgress(), bound, bound.shrine.x + 1, bound.shrine.z + 1, { interact: true });
 assert.equal(live.progress.quests.Q7.status, "done", "shrine interact uses the wayside anchor");
 assert.equal(live.completed[0].action, "祈福");
+
+const worshipSpot = approachWalkPoint(hall.view, [hall.collider], 0.42);
+assert.ok(worshipSpot, "chaoyang inspection view has a walk spot");
+const worshipDist = Math.hypot(worshipSpot.x - hall.view.lookX, worshipSpot.z - hall.view.lookZ);
+assert.ok(worshipDist <= byId.Q2.range, `walk spawn ${worshipDist.toFixed(2)}m must be inside the worship range`);
+assert.equal(hitsCollider(worshipSpot.x, worshipSpot.z, 0.42, hall.collider), false, "worship spawn stands outside the temple mesh");
+const q1Done = emptyQuestProgress();
+q1Done.quests.Q1.status = "done";
+const worshipped = stand(q1Done, bound, worshipSpot.x, worshipSpot.z, {
+  interact: true,
+  dirX: hall.view.lookX - worshipSpot.x,
+  dirZ: hall.view.lookZ - worshipSpot.z,
+});
+assert.equal(worshipped.progress.quests.Q2.status, "done", "Q2 completes at the chaoyang walk spawn");
+assert.equal(worshipped.completed[0]?.id, "Q2");
+assert.equal(currentQuestId(worshipped.progress), "Q3");
+const keeperTalk = stand(q1Done, bound, bound.npcs.keeper.x, bound.npcs.keeper.z, { interact: true });
+assert.equal(keeperTalk.progress.quests.Q2.status, "open", "廟祝 can be talked to before worship");
+assert.equal(keeperTalk.dialog?.name, "廟祝");
+assert.equal(keeperTalk.rows.find((row) => row.id === "Q3").status, "可進行");
 
 console.log("street quests ok", {
   rewards: STREET_QUESTS.map((quest) => quest.reward).join(" "),

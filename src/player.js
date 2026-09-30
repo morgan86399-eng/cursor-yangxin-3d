@@ -290,3 +290,24 @@ export function findStreetSpawn(colliders, roads, radius) {
   return { x: 0, z: 16, lookX: 0, lookZ: 0, lookY: 3.35 };
 }
 
+/** Ground spot in front of an inspection camera, outside building colliders. */
+export function approachWalkPoint(view, colliders = [], radius = 0.42) {
+  const lookX = Number(view?.lookX);
+  const lookZ = Number(view?.lookZ);
+  if (!Number.isFinite(lookX) || !Number.isFinite(lookZ)) return null;
+  const ox0 = Number(view?.x) - lookX;
+  const oz0 = Number(view?.z) - lookZ;
+  const len = Math.hypot(ox0, oz0) || 1;
+  const ox = ox0 / len;
+  const oz = oz0 / len;
+  const pad = Math.max(0.2, radius) + 0.15;
+  for (const dist of [3.6, 4.4, 2.8, 5.2, 6.2, 1.9, 7.4]) {
+    const x = lookX + ox * dist;
+    const z = lookZ + oz * dist;
+    const blocked = (colliders || []).some((collider) => collider?.points && hitsCollider(x, z, pad, collider));
+    if (blocked) continue;
+    return { x, z, y: 0, lookX, lookZ, lookY: 1.7 };
+  }
+  return { x: lookX + ox * 4, z: lookZ + oz * 4, y: 0, lookX, lookZ, lookY: 1.7 };
+}
+

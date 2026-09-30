@@ -15,7 +15,7 @@ export const STREET_QUESTS = Object.freeze([
   }),
   Object.freeze({
     id: "Q2", name: "朝陽宮參拜", place: "朝陽宮", anchor: "chaoyang",
-    range: 6, mode: "interact", action: "參拜",
+    range: 8, mode: "interact", action: "參拜",
     hint: "雙手合十，心先安下來。", reward: "心田+8", points: 8,
   }),
   Object.freeze({
@@ -186,10 +186,10 @@ export function withNpcs(anchors = {}) {
     ...anchors,
     npcs: {
       liu: namedNpc(beside(anchors.yashan, 1.6, 2), { name: "劉師父", range: 3.2, questId: "Q8" }),
-      keeper: namedNpc(beside(anchors.chaoyang, 1.2, 2.2), { name: "廟祝", range: 3.2, questId: "Q12" }),
+      keeper: namedNpc(beside(anchors.chaoyang, 3.2, 1.2), { name: "廟祝", range: 3.2, questId: "Q12" }),
       ahua: namedNpc(beside(anchors.stall, 3.4, 0), { name: "阿花", range: 3, questId: "Q9" }),
       uncle: namedNpc(uncle, { name: "散步阿伯", range: 3.5, questId: "Q10" }),
-      chen: namedNpc(beside(anchors.activity, 1.4, 2.2), { name: "志工小陳", range: 3.2, questId: "Q11" }),
+      chen: namedNpc(beside(anchors.activity, 3.2, 1.0), { name: "志工小陳", range: 3.2, questId: "Q11" }),
       officer: namedNpc(beside(anchors.station, -2.2, 6.6), { name: "巡邏警員", range: 3.2, questId: "" }),
     },
   };
@@ -228,13 +228,13 @@ export function bindQuestAnchors({ landmarkViews = {}, brandViews = [], parkQues
     ...anchors,
     npcs: {
       liu: namedNpc(spotFromView(yashan, 2.2, 1.5), { name: "劉師父", range: 3.2, questId: "Q8" }) || fallback.liu,
-      keeper: namedNpc(spotFromView(landmarkViews.chaoyang, 2.5, -1.2), { name: "廟祝", range: 3.2, questId: "Q12" }) || fallback.keeper,
+      keeper: namedNpc(spotFromView(landmarkViews.chaoyang, 2.4, 3.2), { name: "廟祝", range: 3.2, questId: "Q12" }) || fallback.keeper,
       ahua: namedNpc(
         anchors.stall ? { x: anchors.stall.x + 3.4, z: anchors.stall.z } : null,
         { name: "阿花", range: 3, questId: "Q9" },
       ) || fallback.ahua,
       uncle,
-      chen: namedNpc(spotFromView(landmarkViews.activity, 2.4, 1.3), { name: "志工小陳", range: 3.2, questId: "Q11" }) || fallback.chen,
+      chen: namedNpc(spotFromView(landmarkViews.activity, 2.4, 3.0), { name: "志工小陳", range: 3.2, questId: "Q11" }) || fallback.chen,
       officer: namedNpc(spotFromView(landmarkViews.station, 7.2, -1.6), { name: "巡邏警員", range: 3.2, questId: "" }) || fallback.officer,
     },
   };
@@ -329,50 +329,78 @@ export function advanceQuests(progress, input = {}) {
     }
   }
 
-  let affordance = null;
   const talking = Boolean(input.talk);
-  let interactUsed = false;
-  if (walk && input.interact && !talking) {
-    const current = currentQuestId(next);
-    const preferred = actionable.find((quest) => quest.id === current) || actionable[0] || null;
-    if (preferred && next.quests[preferred.id].status !== "done" && INSTANT_MODES.has(preferred.mode)) {
-      if (complete(next.quests[preferred.id], preferred)) {
-        completed.push(preferred);
-        interactUsed = true;
-      }
-    }
-  }
-  const openActions = actionable.filter((quest) => next.quests[quest.id].status !== "done" && INSTANT_MODES.has(quest.mode));
   const current = currentQuestId(next);
-  const chosen = openActions.find((quest) => quest.id === current) || openActions[0] || null;
-  if (chosen) {
-    affordance = { id: chosen.id, action: chosen.action, label: `E ${chosen.action}` };
-  }
-
-  const dialogue = applyDialogue(next, {
+  const proximity = actionable
+    .filter((quest) => next.quests[quest.id].status !== "done" && INSTANT_MODES.has(quest.mode))
+    .map((quest) => {
+      const point = quest.id === "Q1" ? yashan : quest.id === "Q3" ? stall : pointOf(anchors, quest.anchor);
+      return {
+        id: quest.id,
+        action: quest.action,
+        label: `E ${quest.action}`,
+        kind: "proximity",
+        dist: point ? distance2d(x, z, point.x, point.z) : Infinity,
+        quest,
+      };
+    });
+  const preview = applyDialogue(next, {
     quests: BY_ID,
     anchors,
     mode: input.mode,
     x,
     z,
-    interact: walk && input.interact === true,
-    talkInteract: walk && input.interact === true,
-    consumed: interactUsed,
-    talk: input.talk || null,
-    choiceId: input.choiceId || "",
-    talkNext: input.talkNext === true,
-    talkClose: input.talkClose === true,
+    interact: false,
+    consumed: true,
     currentId: current,
   });
-  completed.push(...dialogue.completed);
-  if (dialogue.dialog) affordance = null;
-  else if (dialogue.affordance && (!affordance || dialogue.affordance.id === current)) {
-    affordance = dialogue.affordance;
+  const talkOffer = preview.affordance?.dist >= 0 ? preview.affordance : null;
+  const currentProx = proximity.find((item) => item.id === current) || null;
+  const otherProx = proximity.filter((item) => item.id !== current).sort((a, b) => a.dist - b.dist)[0] || null;
+  const besideNpc = talkOffer && talkOffer.dist <= 1.75;
+  let offer = null;
+  if (!talking) {
+    if (besideNpc && (!currentProx || talkOffer.dist + 0.35 < currentProx.dist)) offer = talkOffer;
+    else if (currentProx) offer = currentProx;
+    else if (talkOffer && otherProx) offer = talkOffer.dist <= otherProx.dist ? talkOffer : otherProx;
+    else offer = talkOffer || otherProx;
   }
+  let interactUsed = false;
+  if (walk && input.interact && !talking && offer?.kind === "proximity" && offer.quest) {
+    if (complete(next.quests[offer.id], offer.quest)) {
+      completed.push(offer.quest);
+      interactUsed = true;
+      offer = null;
+    }
+  }
+  const dialogue = (offer && offer.kind !== "proximity") || talking
+    ? applyDialogue(next, {
+      quests: BY_ID,
+      anchors,
+      mode: input.mode,
+      x,
+      z,
+      interact: walk && input.interact === true && !interactUsed,
+      talkInteract: walk && input.interact === true,
+      consumed: interactUsed,
+      talk: input.talk || null,
+      choiceId: input.choiceId || "",
+      talkNext: input.talkNext === true,
+      talkClose: input.talkClose === true,
+      currentId: current,
+    })
+    : preview;
+  completed.push(...(dialogue === preview ? [] : dialogue.completed));
+  let affordance = null;
+  if (dialogue.dialog) affordance = null;
+  else if (interactUsed) affordance = dialogue.affordance && dialogue.affordance.dist <= 1.75 ? dialogue.affordance : null;
+  else if (offer?.kind === "proximity") affordance = { id: offer.id, action: offer.action, label: offer.label, kind: "proximity" };
+  else affordance = dialogue.affordance;
 
-  const hintQuest = BY_ID.get(current);
+  const nextId = currentQuestId(next);
+  const hintQuest = BY_ID.get(nextId);
   let inHintRange = false;
-  if (hintQuest && next.quests[current]?.status !== "done") {
+  if (hintQuest && nextId === current && next.quests[nextId]?.status !== "done") {
     if (hintQuest.id === "Q1") inHintRange = q1Near;
     else if (hintQuest.id === "Q3") inHintRange = Boolean(marketNear || stallNear);
     else if (hintQuest.id === "Q4") inHintRange = Boolean(q4row.entered || insidePark);
@@ -381,14 +409,18 @@ export function advanceQuests(progress, input = {}) {
   }
 
   let objective = "街巷任務都完成了。";
-  if (dialogue.objective) objective = dialogue.objective;
-  else if (hintQuest && next.quests[hintQuest.id]?.status !== "done") {
+  const actingId = dialogue.dialog?.questId || (affordance && affordance.kind !== "proximity" ? affordance.id : "");
+  if (dialogue.dialog || (affordance && affordance.kind !== "proximity")) {
+    objective = dialogue.objective || BY_ID.get(actingId)?.hint || "跟對方說一聲。";
+  } else if (affordance?.kind === "proximity") {
+    objective = BY_ID.get(affordance.id)?.hint || objective;
+  } else if (hintQuest && next.quests[hintQuest.id]?.status !== "done") {
     if (hintQuest.id === "Q4" && q4row.entered) {
       const waypoint = park?.waypoints?.[q4row.step];
       const label = waypoint?.label || "下一處";
       objective = `下一處：${label}（${Math.min(q4row.step + 1, park?.waypoints?.length || 3)}／${park?.waypoints?.length || 3}）。${hintQuest.hint}`;
     } else if (inHintRange) objective = hintQuest.hint;
-    else objective = `前往${hintQuest.place}。`;
+    else objective = `前往${hintQuest.place}。靠近別的地點也能先做。`;
   }
 
   const rows = STREET_QUESTS.map((quest) => {
@@ -398,9 +430,9 @@ export function advanceQuests(progress, input = {}) {
       id: quest.id,
       name: quest.name,
       place: quest.place,
-      current: quest.id === current,
+      current: quest.id === nextId,
       done,
-      status: done ? "完成" : quest.id === current ? "進行中" : "未完成",
+      status: done ? "完成" : quest.id === nextId ? "進行中" : "可進行",
       reward: done ? (row.rewardText || quest.reward) : "",
     };
   });
