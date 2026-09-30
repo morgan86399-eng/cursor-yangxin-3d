@@ -24,6 +24,7 @@ import {
   saveQuestProgress,
 } from "./quests.js";
 import { createQuestMarkers } from "./quest-markers.js";
+import { createNpcs } from "./npcs.js";
 import { createWaysideShrines } from "./worship.js";
 
 const statusEl = document.getElementById("status");
@@ -48,6 +49,10 @@ const questListEl = document.getElementById("questList");
 const questObjectiveEl = document.getElementById("questObjective");
 const questToastEl = document.getElementById("questToast");
 const questInteractBtn = document.getElementById("questInteract");
+const questDialogEl = document.getElementById("questDialog");
+const questDialogNameEl = document.getElementById("questDialogName");
+const questDialogTextEl = document.getElementById("questDialogText");
+const questDialogChoicesEl = document.getElementById("questDialogChoices");
 const crosshairEl = document.getElementById("crosshair");
 const lockHintEl = document.getElementById("lockHint");
 const initialParams = new URLSearchParams(window.location.search);
@@ -177,9 +182,16 @@ async function boot() {
   });
   const questMarkers = createQuestMarkers();
   scene.add(questMarkers.group);
+  const streetNpcs = createNpcs(questAnchors.npcs || {});
+  scene.add(streetNpcs.group);
   let questProgress = loadQuestProgress(globalThis.localStorage);
   let questInteractQueued = false;
   let questRewardBusy = false;
+  let questTalk = null;
+  let questChoice = "";
+  let questTalkNext = false;
+  let questTalkClose = false;
+  let questDialogSig = "";
   const questRewardQueue = [];
   const questLook = new THREE.Vector3();
 
@@ -205,6 +217,47 @@ async function boot() {
       questInteractBtn.dataset.quest = affordance?.id || "";
     }
     questMarkers.sync(questMarkerPoints(questProgress, questAnchors), controls.getMode() === "sky");
+    paintDialog(view.dialog);
+  }
+
+  function paintDialog(dialog) {
+    if (!questDialogEl) return;
+    const sig = dialog ? JSON.stringify(dialog) : "";
+    if (sig === questDialogSig) return;
+    questDialogSig = sig;
+    questDialogEl.hidden = !dialog;
+    if (!dialog) return;
+    if (questDialogNameEl) questDialogNameEl.textContent = dialog.name || "";
+    if (questDialogTextEl) questDialogTextEl.textContent = dialog.text || "";
+    if (!questDialogChoicesEl) return;
+    questDialogChoicesEl.replaceChildren();
+    for (const choice of dialog.choices || []) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = choice.label;
+      button.addEventListener("click", () => {
+        questChoice = choice.id;
+      });
+      questDialogChoicesEl.append(button);
+    }
+    if (dialog.canNext) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = dialog.nextLabel || "繼續";
+      button.addEventListener("click", () => {
+        questTalkNext = true;
+      });
+      questDialogChoicesEl.append(button);
+    }
+    if (dialog.canClose) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = dialog.closeLabel || "關閉";
+      button.addEventListener("click", () => {
+        questTalkClose = true;
+      });
+      questDialogChoicesEl.append(button);
+    }
   }
 
   function applyQuest(dt, interact) {
@@ -219,7 +272,15 @@ async function boot() {
       dt,
       interact,
       anchors: questAnchors,
+      talk: questTalk,
+      choiceId: questChoice,
+      talkNext: questTalkNext,
+      talkClose: questTalkClose,
     });
+    questChoice = "";
+    questTalkNext = false;
+    questTalkClose = false;
+    questTalk = view.closeDialog ? null : (view.talk || null);
     questProgress = view.progress;
     if (view.changed) saveQuestProgress(questProgress, globalThis.localStorage);
     for (const quest of view.completed) {
@@ -258,7 +319,7 @@ async function boot() {
   window.addEventListener("keydown", (event) => {
     if (event.code !== "KeyE" || event.repeat) return;
     if (controls.getMode() !== "walk") return;
-    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable], #questDialog")) return;
     questInteractQueued = true;
   });
 
@@ -655,6 +716,13 @@ async function boot() {
       skyMarkersVisible() {
         return questMarkers.group.visible && questMarkers.group.children.some((child) => child.visible);
       },
+      npcs: Object.entries(questAnchors.npcs || {}).map(([id, npc]) => ({
+        id,
+        name: npc?.name || "",
+        x: npc?.x,
+        z: npc?.z,
+        questId: npc?.questId || "",
+      })),
     },
     openSpace: openSpace.group.userData,
     zhenfu: world.zhenfu || null,
@@ -701,6 +769,7 @@ async function boot() {
     const dt = Math.min(clock.getDelta(), 0.05);
     cameraPos.copy(camera.position);
     controls.update(dt);
+    streetNpcs.faceCamera(camera);
     farm?.update();
     const interact = questInteractQueued;
     questInteractQueued = false;

@@ -1,3 +1,4 @@
+import { applyDialogue } from "./dialogue.js";
 import { pointInRing } from "./geo.js";
 
 /** Street quests for 鎮撫街. Anchors are filled from landmark views, not copied OSM ids. */
@@ -42,12 +43,41 @@ export const STREET_QUESTS = Object.freeze([
     range: 5, mode: "interact", action: "祈福",
     hint: "跟地基主說聲平安。", reward: "心田+8", points: 8,
   }),
+  Object.freeze({
+    id: "Q8", name: "跟劉師父打招呼", place: "鎮撫街46號", anchor: "yashan",
+    npc: "liu", range: 3.2, mode: "dialogue", action: "打招呼",
+    hint: "跟劉師父說一聲。", reward: "心田+4", points: 4,
+  }),
+  Object.freeze({
+    id: "Q9", name: "幫攤販遞紙袋", place: "朝陽市場", anchor: "market",
+    npc: "ahua", range: 3, pickupRange: 5, mode: "delivery", action: "遞紙袋",
+    hint: "紙袋送到阿花攤。", reward: "心田+6", points: 6,
+  }),
+  Object.freeze({
+    id: "Q10", name: "聽阿伯講舊街", place: "朝陽公園", anchor: "park",
+    npc: "uncle", range: 3.5, mode: "dialogue", action: "聽故事",
+    hint: "把兩句舊街的事聽完。", reward: "心田+6", points: 6,
+  }),
+  Object.freeze({
+    id: "Q11", name: "跟志工報名活動", place: "活動中心", anchor: "activity",
+    npc: "chen", range: 3.2, mode: "dialogue", action: "報名",
+    hint: "聽完跟志工說一聲。", reward: "心田+5", points: 5,
+  }),
+  Object.freeze({
+    id: "Q12", name: "跟廟祝問香火", place: "朝陽宮", anchor: "chaoyang",
+    npc: "keeper", range: 3.2, mode: "dialogue", action: "請問",
+    hint: "問廟祝一句，再把話收起來。", reward: "心田+6", points: 6,
+  }),
 ]);
 
 const BY_ID = new Map(STREET_QUESTS.map((quest) => [quest.id, quest]));
 
 function blankRow() {
-  return { status: "open", face: 0, step: 0, entered: false, rewardSource: "", rewardText: "" };
+  return {
+    status: "open", face: 0, step: 0, entered: false,
+    bag: false, heard: 0, choice: "",
+    rewardSource: "", rewardText: "",
+  };
 }
 
 export function emptyQuestProgress() {
@@ -69,6 +99,9 @@ export function normalizeQuestProgress(raw) {
       face: Number.isFinite(Number(row.face)) ? Math.max(0, Number(row.face)) : 0,
       step: Number.isFinite(Number(row.step)) ? Math.max(0, Math.floor(Number(row.step))) : 0,
       entered: Boolean(row.entered),
+      bag: Boolean(row.bag),
+      heard: Number.isFinite(Number(row.heard)) ? Math.max(0, Math.floor(Number(row.heard))) : 0,
+      choice: typeof row.choice === "string" ? row.choice : "",
       rewardSource: done && row.rewardSource === "xintian" ? "xintian" : done ? "local" : "",
       rewardText: done ? (typeof row.rewardText === "string" && row.rewardText ? row.rewardText : quest.reward) : "",
     };
@@ -118,10 +151,55 @@ function lookPoint(view) {
   return { x: view.lookX, z: view.lookZ };
 }
 
+function spotFromView(view, out, side) {
+  const look = lookPoint(view);
+  if (!look || !Number.isFinite(view.x) || !Number.isFinite(view.z)) return null;
+  const dx = view.x - look.x;
+  const dz = view.z - look.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const ox = dx / len;
+  const oz = dz / len;
+  return {
+    x: look.x + ox * out - oz * side,
+    z: look.z + oz * out + ox * side,
+  };
+}
+
+function namedNpc(point, fields) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return null;
+  return { x: point.x, z: point.z, ...fields };
+}
+
+export function withNpcs(anchors = {}) {
+  if (anchors?.npcs?.liu && anchors?.npcs?.ahua && anchors?.npcs?.keeper) return anchors;
+  const beside = (point, dx, dz) => (point ? { x: point.x + dx, z: point.z + dz } : null);
+  const gate = anchors.park?.waypoints?.[0];
+  const far = anchors.park?.waypoints?.[1] || gate;
+  let uncle = null;
+  if (gate && far) {
+    const dx = far.x - gate.x;
+    const dz = far.z - gate.z;
+    const len = Math.hypot(dx, dz) || 1;
+    uncle = { x: gate.x + (dx / len) * 4, z: gate.z + (dz / len) * 4 };
+  }
+  return {
+    ...anchors,
+    npcs: {
+      liu: namedNpc(beside(anchors.yashan, 1.6, 2), { name: "劉師父", range: 3.2, questId: "Q8" }),
+      keeper: namedNpc(beside(anchors.chaoyang, 1.2, 2.2), { name: "廟祝", range: 3.2, questId: "Q12" }),
+      ahua: namedNpc(beside(anchors.stall, 3.4, 0), { name: "阿花", range: 3, questId: "Q9" }),
+      uncle: namedNpc(uncle, { name: "散步阿伯", range: 3.5, questId: "Q10" }),
+      chen: namedNpc(beside(anchors.activity, 1.4, 2.2), { name: "志工小陳", range: 3.2, questId: "Q11" }),
+      officer: namedNpc(beside(anchors.station, -2.2, 6.6), { name: "巡邏警員", range: 3.2, questId: "" }),
+    },
+  };
+}
+
 export function bindQuestAnchors({ landmarkViews = {}, brandViews = [], parkQuest = null } = {}) {
   const yashan = (brandViews || []).find((item) => item.brand === "yashanyuan") || null;
   const stall = landmarkViews.marketStall;
-  return {
+  const park = parkQuest?.waypoints?.length ? parkQuest : null;
+  const anchors = {
     yashan: lookPoint(yashan),
     chaoyang: lookPoint(landmarkViews.chaoyang),
     market: lookPoint(landmarkViews.market),
@@ -131,7 +209,34 @@ export function bindQuestAnchors({ landmarkViews = {}, brandViews = [], parkQues
     activity: lookPoint(landmarkViews.activity),
     station: lookPoint(landmarkViews.station),
     shrine: lookPoint(landmarkViews.shrine),
-    park: parkQuest?.waypoints?.length ? parkQuest : null,
+    park,
+  };
+  const fallback = withNpcs(anchors).npcs;
+  const gate = park?.waypoints?.[0];
+  const far = park?.waypoints?.[1] || gate;
+  let uncle = fallback.uncle;
+  if (gate && far) {
+    const dx = far.x - gate.x;
+    const dz = far.z - gate.z;
+    const len = Math.hypot(dx, dz) || 1;
+    uncle = namedNpc(
+      { x: gate.x + (dx / len) * 4, z: gate.z + (dz / len) * 4 },
+      { name: "散步阿伯", range: 3.5, questId: "Q10" },
+    );
+  }
+  return {
+    ...anchors,
+    npcs: {
+      liu: namedNpc(spotFromView(yashan, 2.2, 1.5), { name: "劉師父", range: 3.2, questId: "Q8" }) || fallback.liu,
+      keeper: namedNpc(spotFromView(landmarkViews.chaoyang, 2.5, -1.2), { name: "廟祝", range: 3.2, questId: "Q12" }) || fallback.keeper,
+      ahua: namedNpc(
+        anchors.stall ? { x: anchors.stall.x + 3.4, z: anchors.stall.z } : null,
+        { name: "阿花", range: 3, questId: "Q9" },
+      ) || fallback.ahua,
+      uncle,
+      chen: namedNpc(spotFromView(landmarkViews.activity, 2.4, 1.3), { name: "志工小陳", range: 3.2, questId: "Q11" }) || fallback.chen,
+      officer: namedNpc(spotFromView(landmarkViews.station, 7.2, -1.6), { name: "巡邏警員", range: 3.2, questId: "" }) || fallback.officer,
+    },
   };
 }
 
@@ -143,7 +248,11 @@ function persistedShape(progress) {
   const rows = {};
   for (const quest of STREET_QUESTS) {
     const row = progress.quests[quest.id];
-    rows[quest.id] = { status: row.status, step: row.step, entered: row.entered, rewardSource: row.rewardSource, rewardText: row.rewardText };
+    rows[quest.id] = {
+      status: row.status, step: row.step, entered: row.entered,
+      bag: row.bag, heard: row.heard, choice: row.choice,
+      rewardSource: row.rewardSource, rewardText: row.rewardText,
+    };
   }
   return JSON.stringify(rows);
 }
@@ -162,9 +271,11 @@ function pointOf(anchors, key) {
   return point;
 }
 
+const INSTANT_MODES = new Set(["interact", "face-or-interact", "stall"]);
+
 export function advanceQuests(progress, input = {}) {
   const next = cloneProgress(progress);
-  const anchors = input.anchors || {};
+  const anchors = withNpcs(input.anchors || {});
   const walk = input.mode === "walk";
   const x = Number(input.x);
   const z = Number(input.z);
@@ -219,20 +330,44 @@ export function advanceQuests(progress, input = {}) {
   }
 
   let affordance = null;
-  if (walk && input.interact) {
+  const talking = Boolean(input.talk);
+  let interactUsed = false;
+  if (walk && input.interact && !talking) {
     const current = currentQuestId(next);
     const preferred = actionable.find((quest) => quest.id === current) || actionable[0] || null;
-    if (preferred && next.quests[preferred.id].status !== "done") {
-      if (preferred.mode !== "waypoints" && complete(next.quests[preferred.id], preferred)) {
+    if (preferred && next.quests[preferred.id].status !== "done" && INSTANT_MODES.has(preferred.mode)) {
+      if (complete(next.quests[preferred.id], preferred)) {
         completed.push(preferred);
+        interactUsed = true;
       }
     }
   }
-  const openActions = actionable.filter((quest) => next.quests[quest.id].status !== "done" && quest.mode !== "waypoints");
+  const openActions = actionable.filter((quest) => next.quests[quest.id].status !== "done" && INSTANT_MODES.has(quest.mode));
   const current = currentQuestId(next);
   const chosen = openActions.find((quest) => quest.id === current) || openActions[0] || null;
   if (chosen) {
     affordance = { id: chosen.id, action: chosen.action, label: `E ${chosen.action}` };
+  }
+
+  const dialogue = applyDialogue(next, {
+    quests: BY_ID,
+    anchors,
+    mode: input.mode,
+    x,
+    z,
+    interact: walk && input.interact === true,
+    talkInteract: walk && input.interact === true,
+    consumed: interactUsed,
+    talk: input.talk || null,
+    choiceId: input.choiceId || "",
+    talkNext: input.talkNext === true,
+    talkClose: input.talkClose === true,
+    currentId: current,
+  });
+  completed.push(...dialogue.completed);
+  if (dialogue.dialog) affordance = null;
+  else if (dialogue.affordance && (!affordance || dialogue.affordance.id === current)) {
+    affordance = dialogue.affordance;
   }
 
   const hintQuest = BY_ID.get(current);
@@ -241,11 +376,13 @@ export function advanceQuests(progress, input = {}) {
     if (hintQuest.id === "Q1") inHintRange = q1Near;
     else if (hintQuest.id === "Q3") inHintRange = Boolean(marketNear || stallNear);
     else if (hintQuest.id === "Q4") inHintRange = Boolean(q4row.entered || insidePark);
+    else if (hintQuest.mode === "dialogue" || hintQuest.mode === "delivery") inHintRange = dialogue.inRange;
     else inHintRange = nearInteract(hintQuest);
   }
 
   let objective = "街巷任務都完成了。";
-  if (hintQuest && next.quests[hintQuest.id]?.status !== "done") {
+  if (dialogue.objective) objective = dialogue.objective;
+  else if (hintQuest && next.quests[hintQuest.id]?.status !== "done") {
     if (hintQuest.id === "Q4" && q4row.entered) {
       const waypoint = park?.waypoints?.[q4row.step];
       const label = waypoint?.label || "下一處";
@@ -276,16 +413,21 @@ export function advanceQuests(progress, input = {}) {
     rows,
     changed: persistedShape(progress) !== persistedShape(next),
     inHintRange,
+    dialog: dialogue.dialog,
+    talk: dialogue.talk,
+    closeDialog: dialogue.closeDialog,
   };
 }
 
 export function questMarkerPoints(progress, anchors = {}) {
   const book = normalizeQuestProgress(progress);
+  const placed = withNpcs(anchors);
   const points = [];
   for (const quest of STREET_QUESTS) {
     if (book.quests[quest.id].status === "done") continue;
     let point = null;
-    if (quest.id === "Q3") point = pointOf(anchors, "stall") || pointOf(anchors, "market");
+    if (quest.npc) point = placed.npcs?.[quest.npc] || pointOf(placed, quest.anchor);
+    else if (quest.id === "Q3") point = pointOf(placed, "stall") || pointOf(placed, "market");
     else if (quest.id === "Q4") {
       const step = book.quests.Q4.step;
       const waypoint = anchors.park?.waypoints?.[step] || anchors.park?.waypoints?.[0];

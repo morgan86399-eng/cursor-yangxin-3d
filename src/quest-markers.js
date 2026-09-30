@@ -8,6 +8,11 @@ const COLORS = {
   Q5: 0x6e8c9a,
   Q6: 0x4e565e,
   Q7: 0xf0d56a,
+  Q8: 0x8fb56a,
+  Q9: 0xd27a3a,
+  Q10: 0x6e8fbf,
+  Q11: 0x4ea3a1,
+  Q12: 0xc44848,
 };
 
 export function createQuestMarkers() {

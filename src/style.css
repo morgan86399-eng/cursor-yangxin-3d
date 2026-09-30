@@ -206,6 +206,23 @@ button.is-on, button:hover { background: var(--accent); border-color: transparen
   border-color: transparent;
 }
 .quest-interact[hidden] { display: none; }
+.quest-dialog {
+  position: fixed;
+  left: 50%;
+  bottom: 132px;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: min(420px, calc(100vw - 24px));
+  padding: 12px 14px 10px;
+  border-radius: 16px;
+  background: rgba(24, 16, 10, .92);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+}
+.quest-dialog[hidden] { display: none; }
+.quest-dialog h3 { margin: 0 0 6px; font-size: 15px; }
+.quest-dialog p { margin: 0 0 10px; font-size: 14px; line-height: 1.5; color: #fff6e4; }
+.quest-dialog div { display: flex; flex-wrap: wrap; gap: 8px; }
+.quest-dialog button { min-height: 40px; background: #e2b43a; color: #1c120a; border-color: transparent; font-weight: 700; }
 .farm-sync.is-ready { background: rgba(28, 72, 48, .9); }
 .farm-sync.is-guest { background: rgba(92, 62, 28, .92); }
 .farm-sync.is-offline { background: rgba(122, 42, 32, .92); }
