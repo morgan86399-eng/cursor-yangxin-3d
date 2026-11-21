@@ -45,6 +45,14 @@ function usesTextures(material) {
   return TEXTURE_KEYS.some((key) => material[key]);
 }
 
+export function staysPut(mesh, root) {
+  for (let node = mesh; node && node !== root; node = node.parent) {
+    if (!node.visible || node.userData?.facadeLayer || KEEP_SUBTREES.has(node.name)) return false;
+    if (node.renderOrder !== 0) return false;
+  }
+  return mesh.frustumCulled && mesh.onBeforeRender === plainBeforeRender;
+}
+
 function isStatic(mesh, root) {
   if (!mesh.isMesh || mesh.isInstancedMesh || mesh.isSkinnedMesh || mesh.isBatchedMesh) return false;
   const material = mesh.material;
@@ -71,7 +79,7 @@ function layoutSignature(geometry, names) {
   return sig;
 }
 
-function bake(mesh, matrix, names) {
+export function bakeGeometry(mesh, matrix, names) {
   const source = mesh.geometry;
   const baked = new THREE.BufferGeometry();
   for (const name of names) baked.setAttribute(name, source.attributes[name].clone());
@@ -148,7 +156,7 @@ export function batchStaticMeshes(root, { cellSize = 0, minGroup = 2 } = {}) {
     if (bucket.meshes.length < minGroup) continue;
     const parts = bucket.meshes.map((mesh) => {
       relative.multiplyMatrices(toRoot, mesh.matrixWorld);
-      return bake(mesh, relative, bucket.names);
+      return bakeGeometry(mesh, relative, bucket.names);
     });
     const geometry = mergeGeometries(parts, false);
     for (const part of parts) part.dispose();
