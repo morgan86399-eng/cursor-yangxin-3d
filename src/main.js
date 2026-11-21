@@ -27,6 +27,7 @@ import { createQuestMarkers } from "./quest-markers.js";
 import { createQuestPads } from "./quest-pads.js";
 import { createNpcs } from "./npcs.js";
 import { createWaysideShrines } from "./worship.js";
+import { batchStaticMeshes } from "./static-batch.js";
 
 const statusEl = document.getElementById("status");
 const addressEl = document.getElementById("address");
@@ -175,6 +176,16 @@ async function boot() {
   const signs = createSigns(shops, network.roads, project, config.radiusMeters, world.colliders);
   scene.add(signs.group);
   // The address and focus control live in the HUD; a floating roof billboard distorts street scale.
+
+  // Everything above is built once and never moves. Quest, NPC and farm meshes are added later and stay separate.
+  const staticBatch = { enabled: initialParams.get("batch") !== "off", meshesBefore: 0, meshesAfter: 0, merged: 0, batches: 0 };
+  if (staticBatch.enabled) {
+    for (const root of [network.group, world.group, openSpace.group, shrines.group, streetProps, signs.group]) {
+      if (!root?.parent) continue;
+      const result = batchStaticMeshes(root);
+      for (const key of ["meshesBefore", "meshesAfter", "merged", "batches"]) staticBatch[key] += result[key];
+    }
+  }
 
   const questAnchors = bindQuestAnchors({
     landmarkViews: world.landmarkViews,
@@ -767,6 +778,7 @@ async function boot() {
       },
     },
     openSpace: openSpace.group.userData,
+    staticBatch,
     zhenfu: world.zhenfu || null,
     farm,
     renderQuality: {
