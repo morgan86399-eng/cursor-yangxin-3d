@@ -38,6 +38,7 @@ export function createControls(
   look.maxPolarAngle = Math.PI - 0.18;
   const keys = { w: false, a: false, s: false, d: false, shift: false, jump: false };
   let mode = "sky";
+  let lookHook = null;
   let player = createPlayerState(0, 16, { eyeHeight: eyeHeight || PLAYER.eyeHeight });
   const lookDir = new THREE.Vector3();
   const rightDir = new THREE.Vector3();
@@ -174,6 +175,10 @@ export function createControls(
 
   function rotateLook(dx, dy) {
     if (mode !== "walk") return;
+    if (lookHook) {
+      lookHook(dx, dy);
+      return;
+    }
     rotateCameraLook(camera, dx, dy);
   }
 
@@ -248,5 +253,6 @@ export function createControls(
   return {
     orbit, look, getMode: () => mode, setMode, pose, setLookLocked, update, setKeys, rotateLook,
     getLookPose, getCameraPose, getState, setState,
+    setLookHook: (fn) => { lookHook = typeof fn === "function" ? fn : null; },
   };
 }

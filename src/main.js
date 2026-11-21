@@ -27,6 +27,7 @@ import { createQuestMarkers } from "./quest-markers.js";
 import { createQuestPads } from "./quest-pads.js";
 import { createNpcs } from "./npcs.js";
 import { createWaysideShrines } from "./worship.js";
+import { mountStreetLife } from "./street-life.js";
 
 const statusEl = document.getElementById("status");
 const addressEl = document.getElementById("address");
@@ -60,6 +61,7 @@ const initialParams = new URLSearchParams(window.location.search);
 const initialView = initialParams.get("view");
 const initialBuildingId = initialParams.get("building");
 const initialFacadeMode = normalizeFacadeMode(initialParams.get("facade"));
+const lifeOn = initialParams.get("life") === "1";
 
 function setStatus(text) {
   if (statusEl) statusEl.textContent = text;
@@ -339,11 +341,13 @@ async function boot() {
       skyBtn?.setAttribute("aria-pressed", String(mode === "sky"));
       walkBtn.classList.toggle("is-on", mode === "walk");
       walkBtn?.setAttribute("aria-pressed", String(mode === "walk"));
-      lockBtn.hidden = mode !== "walk";
-      crosshairEl?.classList.toggle("is-on", mode === "walk");
+      lockBtn.hidden = mode !== "walk" || lifeOn;
+      crosshairEl?.classList.toggle("is-on", mode === "walk" && !lifeOn);
       hintEl.textContent =
         mode === "walk"
-          ? "WASD 移動、空白鍵跳躍、Shift 跑步；拖曳畫面轉頭。需要連續轉頭時，可自行鎖定滑鼠，按 Esc 釋放。"
+          ? (lifeOn
+            ? "第三人稱：WASD 移動、拖曳轉向、Shift 跑步。右下角可改早晨、中午、傍晚、夜晚。E 仍是任務。"
+            : "WASD 移動、空白鍵跳躍、Shift 跑步；拖曳畫面轉頭。需要連續轉頭時，可自行鎖定滑鼠，按 Esc 釋放。")
           : mode === "sky"
             ? "天空俯瞰：拖曳平移、滾輪縮放。點「第一視角」走到街上。"
             : "可改「天空俯瞰」或「第一視角」。";
@@ -654,15 +658,20 @@ async function boot() {
   facadeMixedBtn?.addEventListener("click", () => setFacadeMode("mixed"));
   facade25dBtn?.addEventListener("click", () => setFacadeMode("stylized"));
 
+  let streetLife = { enabled: false, update() {} };
   window.__yangxin = {
     enterWalk(opts) {
       controls.setMode("walk");
     },
     setLookLocked: (locked) => controls.setLookLocked(locked),
     setKeys: (next) => controls.setKeys(next),
-    update: (dt) => controls.update(dt),
+    update: (dt) => {
+      controls.update(dt);
+      streetLife.update(dt);
+    },
     getState: () => controls.getState(),
     getLookPose: () => controls.getLookPose(),
+    getCameraPose: () => controls.getCameraPose(),
     setState: (next) => controls.setState(next),
     colliders: world.colliders,
     shopId: world.shopId,
@@ -806,11 +815,23 @@ async function boot() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
+  streetLife = mountStreetLife({
+    scene,
+    camera,
+    renderer,
+    controls,
+    roads: network.roads,
+    colliders: world.colliders,
+    questAnchors,
+    questBlips: () => questMarkerPoints(questProgress, questAnchors),
+  });
+
   const clock = new THREE.Clock();
   function tick() {
     const dt = Math.min(clock.getDelta(), 0.05);
     cameraPos.copy(camera.position);
     controls.update(dt);
+    streetLife.update(dt);
     streetNpcs.faceCamera(camera);
     try { farm?.update(); } catch { /* a failed farm paint must not stop quests */ }
     const interact = questInteractQueued;
