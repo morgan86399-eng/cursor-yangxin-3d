@@ -4,7 +4,7 @@ import { applyDaylight, DAY_HOURS } from "./daylight.js";
 import { chasePose, clampPitch } from "./follow-camera.js";
 import { drawRadar } from "./radar.js";
 import { buildRoadGraph, createPedestrians, createVehicles, dismountSpot, parkSpot, rideReach, roadLanes, routeAlongRoads, stepPedestrians, stepScooter, stepVehicles } from "./traffic.js";
-import { CAR_COLORS, makeCarMesh, makeCitizen, makeScooterMesh, poseCitizen, SHIRTS, SIT_DROP } from "./street-art.js";
+import { CAR_COLORS, LOOKS, makeCarMesh, makeCitizen, makeScooterMesh, outlineFigure, poseCitizen, SIT_DROP } from "./street-art.js";
 
 const RIDE = { radius: 0.7, walkSpeed: 9, runSpeed: 11.5, eyeHeight: 1.45, jumpSpeed: 0 };
 const RIDE_CAMERA = [4.8, 3.6, 2.4, 1.4];
@@ -42,7 +42,9 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   const ambient = scene.children.find((node) => node.isAmbientLight);
   const hemi = scene.children.find((node) => node.isHemisphereLight);
 
-  const body = makeCitizen({ shirt: 0x6e8f62, pants: 0x2a3138, pack: true });
+  const body = outlineFigure(makeCitizen({
+    shirt: 0x4d6a45, pants: 0x23262b, shoes: 0x1a120e, hood: true, sleeves: "long", bag: true,
+  }));
   const rideMesh = makeScooterMesh({ color: 0x1b7a3c, hero: true });
   rideMesh.name = "ride-scooter";
   scene.add(body, rideMesh);
@@ -59,7 +61,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
     return mesh;
   });
   const pedMeshes = people.map((_, index) => {
-    const mesh = makeCitizen({ shirt: SHIRTS[index % SHIRTS.length], hood: false });
+    const mesh = makeCitizen(LOOKS[index % LOOKS.length]);
     mesh.scale.setScalar(0.94 + (index % 3) * 0.03);
     actors.add(mesh);
     return mesh;

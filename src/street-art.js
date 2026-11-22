@@ -6,6 +6,7 @@ const RUBBER = new THREE.MeshLambertMaterial({ color: 0x141414 });
 const GLASS = new THREE.MeshLambertMaterial({ color: 0x9eb4be, transparent: true, opacity: 0.45 });
 const LAMP = new THREE.MeshBasicMaterial({ color: 0xfff1c9, toneMapped: false });
 const TAIL = new THREE.MeshBasicMaterial({ color: 0xff3b2e, toneMapped: false });
+const OUTLINE = new THREE.MeshBasicMaterial({ color: 0x120e0c, side: THREE.BackSide });
 const clothes = new Map();
 
 const THIGH = new THREE.BoxGeometry(0.15, 0.4, 0.16);
@@ -157,6 +158,21 @@ export function makeCitizen({
     legRig("leg-right", 1, trouser, shinMat, cloth(shoes)),
     shadow,
   );
+  return group;
+}
+
+export function outlineFigure(group) {
+  const meshes = [];
+  group.traverse((node) => {
+    if (node.isMesh && node.name !== "shadow" && node.name !== "outline") meshes.push(node);
+  });
+  for (const mesh of meshes) {
+    const shell = new THREE.Mesh(mesh.geometry, OUTLINE);
+    shell.name = "outline";
+    shell.scale.setScalar(1.08);
+    shell.raycast = () => {};
+    mesh.add(shell);
+  }
   return group;
 }
 
