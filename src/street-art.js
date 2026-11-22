@@ -14,8 +14,28 @@ const SHIN = new THREE.BoxGeometry(0.13, 0.38, 0.14);
 const UPPER = new THREE.BoxGeometry(0.12, 0.32, 0.13);
 const FORE = new THREE.BoxGeometry(0.1, 0.28, 0.11);
 const HAND = new THREE.BoxGeometry(0.09, 0.08, 0.1);
-const TORSO = new THREE.BoxGeometry(0.34, 0.36, 0.2);
-const HEM = new THREE.BoxGeometry(0.4, 0.1, 0.24);
+function taperedTorso(topW, botW, height, depth) {
+  const ht = topW / 2;
+  const hb = botW / 2;
+  const hy = height / 2;
+  const hd = depth / 2;
+  const v = [
+    [-ht, hy, hd], [ht, hy, hd], [ht, hy, -hd], [-ht, hy, -hd],
+    [-hb, -hy, hd], [hb, -hy, hd], [hb, -hy, -hd], [-hb, -hy, -hd],
+  ];
+  const faces = [[0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [3, 2, 6, 7], [0, 3, 7, 4], [1, 5, 6, 2]];
+  const positions = [];
+  for (const [a, b, c, d] of faces) {
+    for (const index of [a, b, c, a, c, d]) positions.push(...v[index]);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+const TORSO = taperedTorso(0.56, 0.24, 0.44, 0.24);
+const HEM = new THREE.BoxGeometry(0.3, 0.08, 0.2);
 const YOKE = new THREE.BoxGeometry(0.4, 0.1, 0.22);
 const CAP = new THREE.BoxGeometry(0.14, 0.12, 0.24);
 const SEAM = new THREE.BoxGeometry(0.04, 0.32, 0.03);
@@ -25,8 +45,8 @@ const COWL = new THREE.BoxGeometry(0.38, 0.14, 0.26);
 const SHOE_BOX = new THREE.BoxGeometry(0.14, 0.07, 0.26);
 const PACK = new THREE.BoxGeometry(0.28, 0.32, 0.14);
 const SHADOW = new THREE.CircleGeometry(0.34, 12);
-const SCOOTER_WHEEL = new THREE.CylinderGeometry(0.3, 0.3, 0.13, 14);
-const HUB = new THREE.CylinderGeometry(0.12, 0.12, 0.14, 10);
+const SCOOTER_WHEEL = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 14);
+const HUB = new THREE.CylinderGeometry(0.15, 0.15, 0.21, 10);
 const CAR_WHEEL = new THREE.CylinderGeometry(0.34, 0.34, 0.22, 14);
 const CAR_HUB = new THREE.CylinderGeometry(0.15, 0.15, 0.24, 10);
 const CAR_LAMP = new THREE.BoxGeometry(0.26, 0.1, 0.06);
@@ -102,7 +122,7 @@ export function makeCitizen({
 } = {}) {
   const group = new THREE.Group();
   const jacket = cloth(shirt);
-  const yokeMat = cloth(lift(shirt, 0.36));
+  const yokeMat = cloth(lift(shirt, 0.48));
   const hemMat = cloth(shade(shirt, 0.72));
   const trouser = cloth(pants);
   const shinMat = legs === "shorts" ? SKIN : trouser;
@@ -110,7 +130,9 @@ export function makeCitizen({
   const spine = new THREE.Group();
   spine.name = "spine";
   const torso = new THREE.Mesh(TORSO, jacket);
-  torso.position.y = 1.12;
+  torso.position.y = 1.14;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 0.09, 6), SKIN);
+  neck.position.set(0, 1.46, 0.03);
   const hem = new THREE.Mesh(HEM, hemMat);
   hem.position.set(0, 0.88, -0.02);
   const yoke = new THREE.Mesh(YOKE, yokeMat);
@@ -123,7 +145,7 @@ export function makeCitizen({
   seam.position.set(0, 1.12, -0.115);
   const head = new THREE.Mesh(HEAD, SKIN);
   head.position.set(0, 1.58, 0.04);
-  spine.add(torso, hem, yoke, capL, capR, seam, head);
+  spine.add(torso, neck, hem, yoke, capL, capR, seam, head);
   if (hood) {
     const shell = new THREE.Mesh(HOOD_GEO, jacket);
     shell.name = "hood";
@@ -184,14 +206,14 @@ export function poseCitizen(group, { phase = 0, speed = 0, riding = false } = {}
     node.rotation.x = rot.x || 0;
     node.rotation.z = rot.z || 0;
   };
-  set("leg-left", riding ? { x: -1.2, z: -0.62 } : { x: swing, z: -0.08 });
-  set("leg-right", riding ? { x: -1.2, z: 0.62 } : { x: -swing, z: 0.08 });
-  set("leg-left-knee", { x: riding ? 1.35 : Math.max(0, swing) * 0.45 + 0.12 });
-  set("leg-right-knee", { x: riding ? 1.35 : Math.max(0, -swing) * 0.45 + 0.12 });
-  set("arm-left", riding ? { x: -0.95, z: -0.42 } : { x: -swing * 0.7, z: -0.16 });
-  set("arm-right", riding ? { x: -0.95, z: 0.42 } : { x: swing * 0.7, z: 0.16 });
-  set("arm-left-elbow", { x: riding ? -0.85 : -0.35 });
-  set("arm-right-elbow", { x: riding ? -0.85 : -0.35 });
+  set("leg-left", riding ? { x: -1.3, z: -0.4 } : { x: swing, z: -0.08 });
+  set("leg-right", riding ? { x: -1.3, z: 0.4 } : { x: -swing, z: 0.08 });
+  set("leg-left-knee", { x: riding ? 1.4 : Math.max(0, swing) * 0.55 + 0.28 });
+  set("leg-right-knee", { x: riding ? 1.4 : Math.max(0, -swing) * 0.55 + 0.28 });
+  set("arm-left", riding ? { x: -1.1, z: -0.3 } : { x: -swing * 0.7 - 0.28, z: -0.22 });
+  set("arm-right", riding ? { x: -1.1, z: 0.3 } : { x: swing * 0.7 - 0.28, z: 0.22 });
+  set("arm-left-elbow", riding ? { x: -1.15, z: 0.2 } : { x: -0.9, z: -0.5 });
+  set("arm-right-elbow", riding ? { x: -1.15, z: -0.2 } : { x: -0.9, z: 0.5 });
   const spine = group.getObjectByName("spine");
   if (spine) spine.rotation.x = riding ? 0.38 : 0;
   const shadow = group.getObjectByName("shadow");
@@ -252,36 +274,42 @@ function headlightPool() {
 export function makeScooterMesh({ color = 0x1e3d72, hero = false } = {}) {
   const group = new THREE.Group();
   const paint = cloth(color);
-  const front = scooterWheel(0.84, "wheel-front");
-  const rear = scooterWheel(-0.7, "wheel-rear");
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 1.05), paint);
-  deck.position.set(0, 0.42, 0.08);
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.2, 0.46), paint);
-  tail.position.set(0, 0.5, -0.38);
-  const fender = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.07, 0.4), paint);
-  fender.position.set(0, 0.58, -0.7);
-  const shield = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, 0.1), paint);
-  shield.position.set(0, 0.72, 0.7);
+  const front = scooterWheel(1.02, "wheel-front");
+  const rear = scooterWheel(-0.72, "wheel-rear");
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 1.4), paint);
+  deck.position.set(0, 0.42, 0.22);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.22, 0.5), paint);
+  tail.position.set(0, 0.62, -0.36);
+  const fender = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.46), paint);
+  fender.position.set(0, 0.56, -0.72);
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.46, 0.1), paint);
+  shield.position.set(0, 0.8, 0.84);
   const seat = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.42), RUBBER);
   seat.position.set(0, 0.74, -0.02);
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6), METAL);
-  stem.position.set(0, 0.98, 0.62);
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.07, 0.07), METAL);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.46, 6), METAL);
+  stem.position.set(0, 0.84, 0.94);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.08, 0.08), METAL);
   bar.name = "handlebar";
-  bar.position.set(0, 1.2, 0.7);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.09), RUBBER);
-  grip.position.set(-0.52, 1.2, 0.7);
+  bar.position.set(0, 1.06, 1.02);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.1), RUBBER);
+  grip.position.set(-0.5, 1.06, 1.02);
   const gripR = grip.clone();
   gripR.position.x = 0.52;
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.28), GLASS);
-  visor.position.set(0, 0.9, 0.66);
-  const headlamp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.06), LAMP);
-  headlamp.position.set(0, 0.7, 0.76);
+  const peg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.1), METAL);
+  peg.position.set(-0.26, 0.32, 0.32);
+  const pegR = peg.clone();
+  pegR.position.x = 0.26;
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 0.3), GLASS);
+  visor.position.set(0, 0.96, 0.86);
+  const headlamp = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.06), LAMP);
+  headlamp.position.set(0, 0.74, 0.9);
   headlamp.name = "headlamp";
-  const tailLamp = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.08, 0.05), TAIL);
-  tailLamp.position.set(0, 0.58, -0.64);
+  const tailLamp = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.09, 0.05), TAIL);
+  tailLamp.position.set(0, 0.72, -0.64);
   tailLamp.name = "tail-lamp";
-  group.add(front, rear, deck, tail, fender, shield, seat, stem, bar, grip, gripR, visor, headlamp, tailLamp);
+  group.add(
+    front, rear, deck, tail, fender, shield, seat, stem, bar, grip, gripR, peg, pegR, visor, headlamp, tailLamp,
+  );
   if (hero) group.add(headlightPool());
   return group;
 }
