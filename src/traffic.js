@@ -294,3 +294,36 @@ export function routeAlongRoads(nodes, x, z, tx, tz) {
   points.push({ x: tx, z: tz });
   return { points, meters: dist[goal] + Math.hypot(nodes[goal].x - tx, nodes[goal].z - tz) };
 }
+
+// Put one walker on the sidewalk just ahead of the player so the chase view is not empty.
+export function placeNearbyWalker(people, lanes, colliders, x, z, yaw) {
+  if (!people?.length || !lanes?.length) return false;
+  const goalX = x + Math.sin(yaw) * 6;
+  const goalZ = z + Math.cos(yaw) * 6;
+  let best = null;
+  lanes.forEach((lane, laneIndex) => {
+    const steps = Math.max(2, Math.ceil(lane.length / 3));
+    for (let i = 0; i <= steps; i += 1) {
+      const along = (lane.length * i) / steps;
+      const pose = sample(lane, along);
+      for (const side of [1, -1]) {
+        const spot = sidewalkPoint(pose.x, pose.z, pose.yaw, side, 3.15);
+        const dist = Math.hypot(spot.x - goalX, spot.z - goalZ);
+        if (dist > 4.8) continue;
+        if (!pointClear(spot.x, spot.z, colliders, 0.45)) continue;
+        if (!best || dist < best.dist) best = { dist, laneIndex, along, side, spot, yaw: pose.yaw };
+      }
+    }
+  });
+  if (!best) return false;
+  const person = people[0];
+  person.lane = best.laneIndex;
+  person.along = best.along;
+  person.side = best.side;
+  person.direction = 1;
+  person.x = best.spot.x;
+  person.z = best.spot.z;
+  person.yaw = best.yaw;
+  person.parked = false;
+  return true;
+}

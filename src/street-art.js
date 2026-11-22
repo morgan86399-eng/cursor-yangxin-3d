@@ -210,10 +210,10 @@ export function poseCitizen(group, { phase = 0, speed = 0, riding = false } = {}
   set("leg-right", riding ? { x: -1.3, z: 0.4 } : { x: -swing, z: 0.08 });
   set("leg-left-knee", { x: riding ? 1.4 : Math.max(0, swing) * 0.55 + 0.28 });
   set("leg-right-knee", { x: riding ? 1.4 : Math.max(0, -swing) * 0.55 + 0.28 });
-  set("arm-left", riding ? { x: -1.1, z: -0.3 } : { x: -swing * 0.7 - 0.28, z: -0.22 });
-  set("arm-right", riding ? { x: -1.1, z: 0.3 } : { x: swing * 0.7 - 0.28, z: 0.22 });
-  set("arm-left-elbow", riding ? { x: -1.15, z: 0.2 } : { x: -0.9, z: -0.5 });
-  set("arm-right-elbow", riding ? { x: -1.15, z: -0.2 } : { x: -0.9, z: 0.5 });
+  set("arm-left", riding ? { x: -1.1, z: -0.3 } : { x: -swing * 0.65 - 0.12, z: -0.1 });
+  set("arm-right", riding ? { x: -1.1, z: 0.3 } : { x: swing * 0.65 - 0.12, z: 0.1 });
+  set("arm-left-elbow", riding ? { x: -1.32, z: 0 } : { x: -0.4, z: 0 });
+  set("arm-right-elbow", riding ? { x: -1.32, z: 0 } : { x: -0.4, z: 0 });
   const spine = group.getObjectByName("spine");
   if (spine) spine.rotation.x = riding ? 0.38 : 0;
   const shadow = group.getObjectByName("shadow");

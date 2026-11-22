@@ -3,7 +3,7 @@ import { createPlayerState, stepPlayer } from "./player.js";
 import { applyDaylight, DAY_HOURS } from "./daylight.js";
 import { chasePose, clampPitch } from "./follow-camera.js";
 import { drawRadar } from "./radar.js";
-import { buildRoadGraph, createPedestrians, createVehicles, dismountSpot, parkSpot, rideReach, roadLanes, routeAlongRoads, stepPedestrians, stepScooter, stepVehicles } from "./traffic.js";
+import { buildRoadGraph, createPedestrians, createVehicles, dismountSpot, parkSpot, placeNearbyWalker, rideReach, roadLanes, routeAlongRoads, stepPedestrians, stepScooter, stepVehicles } from "./traffic.js";
 import { CAR_COLORS, LOOKS, makeCarMesh, makeCitizen, makeScooterMesh, outlineFigure, poseCitizen, SIT_DROP } from "./street-art.js";
 
 const RIDE = { radius: 0.7, walkSpeed: 9, runSpeed: 11.5, eyeHeight: 1.45, jumpSpeed: 0 };
@@ -43,7 +43,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   const hemi = scene.children.find((node) => node.isHemisphereLight);
 
   const body = outlineFigure(makeCitizen({
-    shirt: 0x4d6a45, pants: 0x23262b, shoes: 0x1a120e, hood: true, sleeves: "long", bag: true,
+    shirt: 0x4d6a45, pants: 0x23262b, shoes: 0x1a120e, hood: true, sleeves: "long",
   }));
   const rideMesh = makeScooterMesh({ color: 0x1b7a3c, hero: true });
   rideMesh.name = "ride-scooter";
@@ -62,7 +62,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   });
   const pedMeshes = people.map((_, index) => {
     const mesh = makeCitizen(LOOKS[index % LOOKS.length]);
-    mesh.scale.setScalar(0.94 + (index % 3) * 0.03);
+    mesh.scale.setScalar(0.86 + (index % 5) * 0.05);
     actors.add(mesh);
     return mesh;
   });
@@ -391,6 +391,50 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   Object.assign(parked, parkSpot(lanes, colliders, spawned.x, spawned.z));
   rideMesh.position.set(parked.x, 0, parked.z);
   faceAlong(rideMesh, parked.yaw);
+  placeNearbyWalker(people, lanes, colliders, spawned.x, spawned.z, yawState.yaw);
+  api.glance = () => ({
+    riding: api.riding,
+    hour: api.hour,
+    yaw: yawState.yaw,
+    player: { x: controls.getState().x, z: controls.getState().z },
+    parked: { x: parked.x, z: parked.z, yaw: parked.yaw },
+    people: people.filter((person) => !person.parked).map((person) => ({
+      x: person.x, z: person.z, yaw: person.yaw,
+    })),
+    vehicles: vehicles.filter((vehicle) => !vehicle.parked).map((vehicle) => ({
+      x: vehicle.x, z: vehicle.z, yaw: vehicle.yaw, kind: vehicle.kind,
+    })),
+  });
+  api.stage = ({ x, z, yaw = yawState.yaw, mount = api.riding, hour } = {}) => {
+    if (Number.isFinite(hour)) api.hour = hour;
+    if (mount && !api.riding) {
+      rider = createPlayerState(x, z, { eyeHeight: RIDE.eyeHeight });
+      rideSpeed = 0;
+      api.riding = true;
+      controls.setDriveExternal(true);
+    } else if (!mount && api.riding) {
+      api.riding = false;
+      rider = null;
+      rideSpeed = 0;
+      controls.setDriveExternal(false);
+    }
+    yawState.yaw = yaw;
+    camYaw = yaw;
+    followYaw = yaw;
+    lookOffset = 0;
+    if (api.riding && rider) {
+      rider.x = x;
+      rider.z = z;
+      parked.x = x;
+      parked.z = z;
+      parked.yaw = yaw;
+    }
+    controls.setState({
+      x, z, y: 0, vx: 0, vz: 0, vy: 0,
+      eyeHeight: api.riding ? RIDE.eyeHeight : eyeHeight,
+    });
+  };
+  globalThis.__streetLife = api;
   const hint = document.getElementById("hint");
   if (hint && controls.getMode() === "walk") {
     hint.textContent = "走路：WASD 相對鏡頭移動，人會轉向走的方向，拖曳只轉動鏡頭。機車：F 上下車，W 加油、S 煞車、A D 轉車頭，拖曳暫時看旁邊。雷達黃線沿著街道通往任務，E 仍是任務。";
