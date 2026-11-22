@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "area": "桃園市桃園區鎮撫街46號周邊，遊戲場景半徑200公尺",
+  "updatedAt": "2026-09-27",
+  "calibrationStatus": "estimated-not-site-calibrated",
+  "summary": "地坪近景材質是程序化視覺推估。現有資料不足以確認鎮撫街46號門前的實際鋪面顏色、接縫形狀或當前標線狀態。",
+  "sources": [
+    {
+      "id": "nlsc-photo2-local",
+      "type": "orthophoto",
+      "file": "ground.jpg",
+      "provider": "內政部國土測繪中心 PHOTO2",
+      "downloadedAt": "2026-09-19T02:19:26.506Z",
+      "imageCaptureDate": null,
+      "role": "遠景地表與道路大致位置；近景陰影不當作鋪面顏色",
+      "limitations": "來源檔未附本街區攝影日期；建物陰影與車輛會遮住地坪。"
+    },
+    {
+      "id": "osm-local",
+      "type": "road-centerlines-and-crossings",
+      "file": "osm-200m.json, crossings.json",
+      "provider": "OpenStreetMap contributors",
+      "role": "道路中心線、道路類別及有標記的斑馬線位置",
+      "limitations": "遊戲路寬、人行道寬度與路緣位置是估算；不含鋪面色碼。"
+    },
+    {
+      "id": "osm-asphalt-tags",
+      "type": "road-surface-category",
+      "sourceRepositoryPath": "engine/unity-outdoor/RealFarm/sources/derived/roads.geojson",
+      "provider": "OpenStreetMap contributors",
+      "role": "鎮撫街兩段道路的 surface=asphalt 類別佐證",
+      "sourceWays": ["https://www.openstreetmap.org/way/1276792256", "https://www.openstreetmap.org/way/1276792257"],
+      "limitations": "asphalt 只說明路面類別，無法推算色值、補丁、老化或目前狀態；來源檔不在公開 3D 場景內。"
+    },
+    {
+      "id": "mapillary-chunri-2019",
+      "type": "nearby-street-photo-visual-reference-only",
+      "url": "https://www.mapillary.com/app/?pKey=824649271764118",
+      "provider": "Mapillary contributor",
+      "photoDate": "2019-11-29",
+      "location": { "lat": 24.998157575327, "lon": 121.31510927362 },
+      "approxDistanceFromSceneOriginMeters": 46.1,
+      "role": "僅參考春日路附近柏油與標線的視覺方向；未複製照片像素製作材質",
+      "limitations": "位於春日路，並非鎮撫街46號門前；2019年的影像無法驗證目前色彩。"
+    }
+  ],
+  "layers": [
+    { "id": "asphalt", "basis": "procedural-estimate", "siteMeasured": false, "note": "冷灰色碎粒與輕微磨耗是視覺推估，不是現場採色。" },
+    { "id": "walkway", "basis": "procedural-estimate", "siteMeasured": false, "note": "鋪面板塊、縫線、色差均未由46號門前照片校準。" },
+    { "id": "curbs", "basis": "road-centerline-buffer-estimate", "siteMeasured": false, "note": "12公分路緣高度與位置未實測。" },
+    { "id": "zebra-crossings", "basis": "osm-crossings-json", "siteMeasured": false, "note": "只依標記為zebra的位置繪出；形狀及當前漆面狀態未現勘。" },
+    { "id": "other-road-markings", "basis": "nearby-2019-photo-and-road-geometry", "siteMeasured": false, "sourceRoadId": "way/5118000", "rendered": "春日路路口往北18至32公尺、44至58公尺各一小段雙黃線", "note": "僅在有影像參考的春日路段做保守繪製；鎮撫街46號門前未新增標線。" }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "area": "鎮撫街46號附近半徑50公尺",
+  "method": "現地目視樓層＋門牌點與 NLSC 建物輪廓對位；米高仍為遊戲模型推估",
+  "surveyedOn": "2026-09-18",
+  "modeled": [
+    {
+      "address": "鎮撫街46號",
+      "nlscId": "nlsc/414",
+      "observedFloors": 3,
+      "estimatedHeightMeters": 9.9,
+      "alignment": "門牌原點落在此輪廓；Overture 分戶與 NLSC 幾何不完全一致",
+      "surveyFile": "engine/unity-outdoor/RealFarm/LOCAL_BUILDING_SPLITS.json"
+    },
+    {
+      "address": "鎮撫街48號",
+      "nlscId": "nlsc/410",
+      "observedFloors": 5,
+      "estimatedHeightMeters": 14.65,
+      "alignment": "48號門牌點落在此輪廓，且與 Overture 48/50 輪廓有交疊；未把同輪廓內50號套成5層",
+      "surveyFile": "engine/unity-outdoor/RealFarm/LOCAL_FLOOR_SURVEY.json"
+    }
+  ],
+  "notMapped": [
+    {
+      "address": "鎮撫街44號",
+      "observedFloors": 4,
+      "reason": "nlsc/420 同時跨越 44/46 兩戶，尚無足夠證據將整個輪廓指定為44號"
+    },
+    {
+      "address": "鎮撫街42號",
+      "observedFloors": 3,
+      "reason": "門牌點不在任何 NLSC 建物輪廓內，尚未找到可靠對位"
+    }
+  ],
+  "limits": [
+    "沒有逐棟實測公尺高度",
+    "沒有鎮撫街46號已校正的正面影像",
+    "本輪沒有用 Google 街景或 Google 3D Tiles 產生自有模型",
+    "建物立面細節及招牌外觀仍是推估"
+  ]
+}

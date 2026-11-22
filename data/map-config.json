@@ -1,0 +1,29 @@
+{
+  "address": "桃園市桃園區鎮撫街46號",
+  "label": "養心推拿（2樓）",
+  "lat": 24.997987,
+  "lon": 121.3146923,
+  "geocodeSource": "nominatim",
+  "geocodeNote": "46號, 鎮撫街, 北門埔仔, 成功里, 桃園區, 桃園市, 330, 臺灣",
+  "radiusMeters": 200,
+  "eyeHeight": 1.6,
+  "walkSpeed": 4.5,
+  "jumpSpeed": 7.2,
+  "ground": {
+    "image": "data/ground.jpg",
+    "zoom": 20,
+    "source": "nlsc-photo2",
+    "attribution": "正射影像：內政部國土測繪中心",
+    "north": 25.000371991318293,
+    "west": 121.31206512451172,
+    "south": 24.99570457552584,
+    "east": 121.31721496582031,
+    "tileX0": 877635,
+    "tileY0": 449042,
+    "tileX1": 877649,
+    "tileY1": 449056,
+    "pixelWidth": 3840,
+    "pixelHeight": 3840
+  },
+  "fetchedAt": "2026-09-19T02:19:26.506Z"
+}
