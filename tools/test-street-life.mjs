@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { daylightPreset } from "../src/daylight.js";
 import { chasePose, clampPitch } from "../src/follow-camera.js";
 import { radarPoint } from "../src/radar.js";
-import { createPedestrians, createVehicles, roadLanes, stepPedestrians, stepVehicles } from "../src/traffic.js";
+import { createPedestrians, createVehicles, dismountSpot, parkSpot, rideReach, roadLanes, stepPedestrians, stepVehicles } from "../src/traffic.js";
 import { mountStreetLife } from "../src/street-life.js";
 
 const noon = daylightPreset(12);
@@ -62,6 +62,23 @@ const blocked = {
 };
 const spawned = createPedestrians(lanes, [blocked], 4);
 assert.ok(spawned.length > 0 && spawned.every((person) => person.x < 0), "walkers do not spawn inside a building");
+
+const rideLane = roadLanes([{ pts: [{ x: 0, z: 0 }, { x: 0, z: 40 }] }]);
+const parked = parkSpot(rideLane, [], 0, 8);
+const parkedDist = Math.hypot(parked.x, parked.z - 8);
+assert.ok(parkedDist >= 5 && parkedDist <= 18, "the ride scooter parks a short walk down the lane");
+assert.equal(rideReach(parked.x, parked.z + 2, parked), 2);
+assert.equal(rideReach(parked.x, parked.z + 3, parked), null);
+const sideWall = {
+  minX: 0.4, maxX: 3, minZ: -2, maxZ: 2,
+  points: [
+    { x: 0.4, z: -2 }, { x: 3, z: -2 }, { x: 3, z: 2 }, { x: 0.4, z: 2 }, { x: 0.4, z: -2 },
+  ],
+};
+const stepOff = dismountSpot(0, 0, 0, [sideWall]);
+assert.ok(stepOff.x < 0, "dismount steps to the clear side");
+const ridingCam = chasePose({ x: 0, z: 0, yaw: 0, distances: [4.8, 3.6, 2.4, 1.4] });
+assert.equal(ridingCam.distance, 4.8);
 
 globalThis.location = { search: "" };
 const dormant = mountStreetLife({});

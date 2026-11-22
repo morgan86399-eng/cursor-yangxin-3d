@@ -97,6 +97,41 @@ export function pointClear(x, z, colliders, radius) {
   return !(colliders || []).some((collider) => collider?.points && hitsCollider(x, z, radius, collider));
 }
 
+export function parkSpot(lanes, colliders, x, z) {
+  let best = null;
+  for (const lane of lanes || []) {
+    const steps = Math.max(2, Math.floor(lane.length / 4));
+    for (let i = 0; i <= steps; i += 1) {
+      const pose = sample(lane, (lane.length * i) / steps);
+      const dist = Math.hypot(pose.x - x, pose.z - z);
+      if (dist < 5 || dist > 18) continue;
+      if (!pointClear(pose.x, pose.z, colliders, 0.9)) continue;
+      if (!best || dist < best.dist) best = { ...pose, dist };
+    }
+  }
+  if (best) return best;
+  const beside = { x: x + 2.6, z, yaw: 0 };
+  if (pointClear(beside.x, beside.z, colliders, 0.8)) return beside;
+  return { x, z: z + 2.6, yaw: 0 };
+}
+
+export function rideReach(x, z, scooter, reach = 2.2) {
+  if (!scooter || !Number.isFinite(scooter.x) || !Number.isFinite(scooter.z)) return null;
+  const distance = Math.hypot(scooter.x - x, scooter.z - z);
+  return distance <= reach ? distance : null;
+}
+
+export function dismountSpot(x, z, yaw, colliders) {
+  const rightX = Math.cos(yaw);
+  const rightZ = -Math.sin(yaw);
+  for (const side of [1, -1]) {
+    const px = x + rightX * 1.15 * side;
+    const pz = z + rightZ * 1.15 * side;
+    if (pointClear(px, pz, colliders, 0.5)) return { x: px, z: pz };
+  }
+  return { x, z };
+}
+
 export function createPedestrians(lanes, colliders, count) {
   const people = [];
   for (let i = 0; i < count && lanes.length; i += 1) {

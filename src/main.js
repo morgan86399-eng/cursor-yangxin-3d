@@ -346,7 +346,7 @@ async function boot() {
       hintEl.textContent =
         mode === "walk"
           ? (lifeOn
-            ? "第三人稱：WASD 移動、拖曳轉向、Shift 跑步。右下角可改早晨、中午、傍晚、夜晚。E 仍是任務。"
+            ? "第三人稱：WASD 移動、拖曳轉向、Shift 跑步。靠近綠色機車按 F 上車，再按 F 下車。E 仍是任務。"
             : "WASD 移動、空白鍵跳躍、Shift 跑步；拖曳畫面轉頭。需要連續轉頭時，可自行鎖定滑鼠，按 Esc 釋放。")
           : mode === "sky"
             ? "天空俯瞰：拖曳平移、滾輪縮放。點「第一視角」走到街上。"
@@ -658,7 +658,7 @@ async function boot() {
   facadeMixedBtn?.addEventListener("click", () => setFacadeMode("mixed"));
   facade25dBtn?.addEventListener("click", () => setFacadeMode("stylized"));
 
-  let streetLife = { enabled: false, update() {} };
+  let streetLife = { enabled: false, prepare() {}, update() {} };
   window.__yangxin = {
     enterWalk(opts) {
       controls.setMode("walk");
@@ -666,6 +666,7 @@ async function boot() {
     setLookLocked: (locked) => controls.setLookLocked(locked),
     setKeys: (next) => controls.setKeys(next),
     update: (dt) => {
+      streetLife.prepare();
       controls.update(dt);
       streetLife.update(dt);
     },
@@ -824,12 +825,14 @@ async function boot() {
     colliders: world.colliders,
     questAnchors,
     questBlips: () => questMarkerPoints(questProgress, questAnchors),
+    worldRadius: Math.max(config.radiusMeters, PARK_WALK_REACH),
   });
 
   const clock = new THREE.Clock();
   function tick() {
     const dt = Math.min(clock.getDelta(), 0.05);
     cameraPos.copy(camera.position);
+    streetLife.prepare();
     controls.update(dt);
     streetLife.update(dt);
     streetNpcs.faceCamera(camera);

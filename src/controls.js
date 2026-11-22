@@ -39,6 +39,7 @@ export function createControls(
   const keys = { w: false, a: false, s: false, d: false, shift: false, jump: false };
   let mode = "sky";
   let lookHook = null;
+  let driveExternal = false;
   let player = createPlayerState(0, 16, { eyeHeight: eyeHeight || PLAYER.eyeHeight });
   const lookDir = new THREE.Vector3();
   const rightDir = new THREE.Vector3();
@@ -173,6 +174,24 @@ export function createControls(
     Object.assign(keys, next);
   }
 
+  function getMoveInput() {
+    camera.getWorldDirection(lookDir);
+    lookDir.y = 0;
+    if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1);
+    lookDir.normalize();
+    rightDir.crossVectors(lookDir, up).normalize();
+    return {
+      forward: (keys.w ? 1 : 0) + (keys.s ? -1 : 0),
+      strafe: (keys.d ? 1 : 0) + (keys.a ? -1 : 0),
+      run: keys.shift,
+      jump: keys.jump,
+      fwdX: lookDir.x,
+      fwdZ: lookDir.z,
+      rightX: rightDir.x,
+      rightZ: rightDir.z,
+    };
+  }
+
   function rotateLook(dx, dy) {
     if (mode !== "walk") return;
     if (lookHook) {
@@ -209,6 +228,10 @@ export function createControls(
       return;
     }
     if (mode !== "walk") return;
+    if (driveExternal) {
+      keys.jump = false;
+      return;
+    }
     camera.getWorldDirection(lookDir);
     lookDir.y = 0;
     if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1);
@@ -252,7 +275,8 @@ export function createControls(
 
   return {
     orbit, look, getMode: () => mode, setMode, pose, setLookLocked, update, setKeys, rotateLook,
-    getLookPose, getCameraPose, getState, setState,
+    getLookPose, getCameraPose, getState, setState, getMoveInput,
+    setDriveExternal: (on) => { driveExternal = !!on; },
     setLookHook: (fn) => { lookHook = typeof fn === "function" ? fn : null; },
   };
 }

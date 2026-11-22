@@ -1,8 +1,12 @@
 import * as THREE from "three";
+import { createPlayerState, stepPlayer } from "./player.js";
 import { applyDaylight, DAY_HOURS } from "./daylight.js";
 import { chasePose, clampPitch } from "./follow-camera.js";
 import { drawRadar } from "./radar.js";
-import { createPedestrians, createVehicles, roadLanes, stepPedestrians, stepVehicles } from "./traffic.js";
+import { createPedestrians, createVehicles, dismountSpot, parkSpot, rideReach, roadLanes, stepPedestrians, stepVehicles } from "./traffic.js";
+
+const RIDE = { radius: 0.7, walkSpeed: 9, runSpeed: 11.5, eyeHeight: 1.45, jumpSpeed: 0 };
+const RIDE_CAMERA = [4.8, 3.6, 2.4, 1.4];
 
 function makeWalker() {
   const group = new THREE.Group();
@@ -16,9 +20,9 @@ function makeWalker() {
   return group;
 }
 
-function makeScooter() {
+function makeScooter(color = 0x1e3d72) {
   const group = new THREE.Group();
-  const body = new THREE.MeshLambertMaterial({ color: 0x1e3d72 });
+  const body = new THREE.MeshLambertMaterial({ color });
   const dark = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
   const deck = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.07, 0.32), body);
   deck.position.y = 0.32;
@@ -65,9 +69,9 @@ function faceAlong(mesh, yaw) {
 
 const QUEST_BLIP_KEYS = ["yashan", "chaoyang", "market", "stall", "activity", "station", "shrine"];
 
-export function mountStreetLife({ scene, camera, renderer, controls, roads, colliders, questAnchors, questBlips }) {
+export function mountStreetLife({ scene, camera, renderer, controls, roads, colliders, questAnchors, questBlips, worldRadius = 220 }) {
   const enabled = new URLSearchParams(globalThis.location?.search || "").get("life") === "1";
-  const api = { enabled, hour: 17.5, update() {} };
+  const api = { enabled, riding: false, hour: 17.5, prepare() {}, update() {} };
   if (!enabled) return api;
 
   const yawState = { yaw: 0, pitch: 0.15 };
@@ -80,7 +84,13 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   const ambient = scene.children.find((node) => node.isAmbientLight);
 
   const body = makeWalker();
-  scene.add(body);
+  const rideMesh = makeScooter(0x1b7a3c);
+  rideMesh.name = "ride-scooter";
+  rideMesh.scale.set(1.55, 1, 1.65);
+  scene.add(body, rideMesh);
+  const parked = { x: 2.6, z: 0, yaw: 0 };
+  const eyeHeight = controls.getState().eyeHeight;
+  let rider = null;
   const actors = new THREE.Group();
   actors.name = "street-life";
   const vehicleMeshes = vehicles.map((vehicle) => {
@@ -107,7 +117,11 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   radar.setAttribute("aria-label", "街區雷達");
   const hours = document.createElement("div");
   hours.className = "row";
-  panel.append(hours, radar);
+  const rideBtn = document.createElement("button");
+  rideBtn.type = "button";
+  rideBtn.id = "rideScooterBtn";
+  rideBtn.textContent = "騎機車";
+  panel.append(hours, rideBtn, radar);
   document.body.append(panel);
   for (const preset of DAY_HOURS) {
     const button = document.createElement("button");
@@ -116,6 +130,45 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
     button.addEventListener("click", () => { api.hour = preset.hour; });
     hours.append(button);
   }
+
+  function endRide() {
+    if (!api.riding || !rider) {
+      api.riding = false;
+      rider = null;
+      rideBtn.textContent = "騎機車";
+      return;
+    }
+    const spot = dismountSpot(rider.x, rider.z, yawState.yaw, colliders);
+    parked.x = rider.x;
+    parked.z = rider.z;
+    parked.yaw = yawState.yaw;
+    api.riding = false;
+    rider = null;
+    controls.setDriveExternal(false);
+    controls.setState({ x: spot.x, z: spot.z, y: 0, vx: 0, vz: 0, vy: 0, eyeHeight });
+    rideBtn.textContent = "騎機車";
+  }
+
+  function toggleRide() {
+    if (controls.getMode() !== "walk") return;
+    if (api.riding) {
+      endRide();
+      return;
+    }
+    const state = controls.getState();
+    if (rideReach(state.x, state.z, parked) == null) return;
+    rider = createPlayerState(parked.x, parked.z, { eyeHeight: RIDE.eyeHeight });
+    yawState.yaw = parked.yaw;
+    api.riding = true;
+    controls.setDriveExternal(true);
+    rideBtn.textContent = "下車";
+  }
+  rideBtn.addEventListener("click", toggleRide);
+  window.addEventListener("keydown", (event) => {
+    if (event.code !== "KeyF" || event.repeat) return;
+    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
+    toggleRide();
+  });
 
   controls.setLookHook((dx, dy) => {
     yawState.yaw -= dx * 0.004;
@@ -127,10 +180,22 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   let radarWait = 0;
 
   function placeCamera(state) {
-    const pose = chasePose({ x: state.x, z: state.z, y: state.y, yaw: yawState.yaw, pitch: yawState.pitch, colliders });
+    const pose = chasePose({
+      x: state.x,
+      z: state.z,
+      y: state.y,
+      yaw: yawState.yaw,
+      pitch: yawState.pitch,
+      colliders,
+      distances: api.riding ? RIDE_CAMERA : undefined,
+    });
     camera.position.set(pose.x, pose.y, pose.z);
     camera.lookAt(pose.lookX, pose.lookY, pose.lookZ);
   }
+
+  api.prepare = () => {
+    controls.setDriveExternal(api.riding && controls.getMode() === "walk");
+  };
 
   api.update = (dt) => {
     const look = applyDaylight({ THREE, scene, sky, sun, ambient, renderer, lamps }, api.hour);
@@ -140,6 +205,34 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
       yawState.yaw = Math.atan2(lookDir.x, lookDir.z);
     }
     lastMode = mode;
+    if (mode !== "walk" && api.riding) {
+      parked.x = rider?.x ?? parked.x;
+      parked.z = rider?.z ?? parked.z;
+      parked.yaw = yawState.yaw;
+      api.riding = false;
+      rider = null;
+      controls.setDriveExternal(false);
+      rideBtn.textContent = "騎機車";
+    }
+    let state = controls.getState();
+    if (api.riding && rider && mode === "walk") {
+      const input = controls.getMoveInput();
+      input.jump = false;
+      input.fwdX = Math.sin(yawState.yaw);
+      input.fwdZ = Math.cos(yawState.yaw);
+      input.rightX = Math.cos(yawState.yaw);
+      input.rightZ = -Math.sin(yawState.yaw);
+      rider = stepPlayer(rider, input, dt, colliders, worldRadius, RIDE);
+      controls.setState({
+        x: rider.x, z: rider.z, y: rider.y,
+        vx: rider.vx, vz: rider.vz, vy: rider.vy,
+        eyeHeight: RIDE.eyeHeight,
+      });
+      parked.x = rider.x;
+      parked.z = rider.z;
+      parked.yaw = yawState.yaw;
+      state = controls.getState();
+    }
     const night = api.hour >= 20 || api.hour < 5;
     const vehicleCap = night ? Math.min(3, vehicles.length) : vehicles.length;
     const pedCap = night ? Math.min(4, people.length) : people.length;
@@ -148,11 +241,11 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
       vehicle.cruise = vehicle.parked ? 0 : vehicle.base;
     });
     people.forEach((person, index) => { person.parked = index >= pedCap; });
-    const state = controls.getState();
     const blockers = [
-      { x: state.x, z: state.z, radius: 1.8 },
+      { x: state.x, z: state.z, radius: api.riding ? 2.2 : 1.8 },
       ...people.filter((person) => !person.parked).map((person) => ({ x: person.x, z: person.z, radius: 0.8 })),
     ];
+    if (!api.riding) blockers.push({ x: parked.x, z: parked.z, radius: 1.5 });
     stepVehicles(vehicles, lanes, dt, blockers);
     stepPedestrians(people, lanes, dt, colliders);
     const lampsOn = look.lamp > 0.4;
@@ -169,6 +262,13 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
       pedMeshes[index].position.set(person.x, 0, person.z);
       pedMeshes[index].rotation.y = person.yaw;
     });
+    const nearRide = rideReach(state.x, state.z, parked) != null;
+    rideMesh.visible = true;
+    rideMesh.position.set(parked.x, 0, parked.z);
+    faceAlong(rideMesh, parked.yaw);
+    const rideLamp = rideMesh.getObjectByName("headlamp");
+    if (rideLamp) rideLamp.visible = lampsOn;
+    rideBtn.textContent = api.riding ? "下車" : (nearRide ? "按 F 上車" : "靠近機車");
     if (mode !== "walk") {
       body.visible = false;
       panel.hidden = true;
@@ -177,7 +277,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
     if (state.locked) controls.setLookLocked(false);
     panel.hidden = false;
     body.visible = true;
-    body.position.set(state.x, state.y, state.z);
+    body.position.set(state.x, state.y + (api.riding ? 0.28 : 0), state.z);
     body.rotation.y = yawState.yaw;
     placeCamera(state);
     radarWait += dt;
@@ -197,6 +297,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
     for (const person of people) {
       if (!person.parked) blips.push({ x: person.x, z: person.z, color: "#9ad0ff", radius: 2.2 });
     }
+    if (!api.riding) blips.push({ x: parked.x, z: parked.z, color: "#7dffb2", radius: 3.6 });
     drawRadar(radar, { px: state.x, pz: state.z, yaw: yawState.yaw, blips });
   };
 
@@ -207,9 +308,13 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
     yawState.yaw = Math.atan2(lookDir.x, lookDir.z);
     lastMode = "walk";
   }
+  const spawned = controls.getState();
+  Object.assign(parked, parkSpot(lanes, colliders, spawned.x, spawned.z));
+  rideMesh.position.set(parked.x, 0, parked.z);
+  faceAlong(rideMesh, parked.yaw);
   const hint = document.getElementById("hint");
   if (hint && controls.getMode() === "walk") {
-    hint.textContent = "第三人稱：WASD 移動、拖曳轉向、Shift 跑步。右下角可改早晨、中午、傍晚、夜晚。E 仍是任務。";
+    hint.textContent = "第三人稱：WASD 移動、拖曳轉向、Shift 跑步。靠近綠色機車按 F 上車，再按 F 下車。E 仍是任務。";
   }
   return api;
 }
