@@ -10,7 +10,21 @@ export function radarPoint(px, pz, x, z, range, size) {
   return { x: sx, y: sy };
 }
 
-export function drawRadar(canvas, { px, pz, yaw = 0, blips = [], range = 70 }) {
+export function radarGuide(px, pz, x, z, range, size) {
+  const center = size / 2;
+  const scale = (size * 0.42) / range;
+  let sx = (x - px) * scale;
+  let sy = (z - pz) * scale;
+  const reach = size * 0.42;
+  const dist = Math.hypot(sx, sy) || 1;
+  if (dist > reach) {
+    sx = sx / dist * reach;
+    sy = sy / dist * reach;
+  }
+  return { x: center + sx, y: center + sy };
+}
+
+export function drawRadar(canvas, { px, pz, yaw = 0, blips = [], range = 70, guide = null, route = null }) {
   const ctx = canvas.getContext("2d");
   const size = canvas.width;
   const center = size / 2;
@@ -25,6 +39,33 @@ export function drawRadar(canvas, { px, pz, yaw = 0, blips = [], range = 70 }) {
   ctx.fillStyle = "rgba(255,255,255,0.18)";
   ctx.fillRect(center - 0.5, center - size * 0.46, 1, size * 0.92);
   ctx.fillRect(center - size * 0.46, center - 0.5, size * 0.92, 1);
+  if (route?.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(226, 177, 58, 0.95)";
+    ctx.lineWidth = 3;
+    let drawing = false;
+    for (const point of route) {
+      const spot = radarPoint(px, pz, point.x, point.z, range, size);
+      if (!spot) {
+        drawing = false;
+        continue;
+      }
+      if (!drawing) {
+        ctx.moveTo(spot.x, spot.y);
+        drawing = true;
+      } else ctx.lineTo(spot.x, spot.y);
+    }
+    ctx.stroke();
+  }
+  if (guide && Number.isFinite(guide.x) && Number.isFinite(guide.z)) {
+    const tip = radarGuide(px, pz, guide.x, guide.z, range, size);
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(240, 160, 106, 0.95)";
+    ctx.lineWidth = 3;
+    ctx.moveTo(center, center);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.stroke();
+  }
   for (const blip of blips) {
     const point = radarPoint(px, pz, blip.x, blip.z, range, size);
     if (!point) continue;

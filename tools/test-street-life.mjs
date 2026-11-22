@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { daylightPreset } from "../src/daylight.js";
 import { makeCitizen, makeScooterMesh, poseCitizen } from "../src/street-art.js";
 import { chasePose, clampPitch } from "../src/follow-camera.js";
-import { radarPoint } from "../src/radar.js";
-import { createPedestrians, createVehicles, dismountSpot, parkSpot, rideReach, roadLanes, stepPedestrians, stepVehicles } from "../src/traffic.js";
+import { radarGuide, radarPoint } from "../src/radar.js";
+import { buildRoadGraph, createPedestrians, createVehicles, dismountSpot, parkSpot, rideReach, roadLanes, routeAlongRoads, stepPedestrians, stepScooter, stepVehicles } from "../src/traffic.js";
 import { mountStreetLife } from "../src/street-life.js";
 
 const noon = daylightPreset(12);
@@ -20,6 +20,29 @@ const citizen = makeCitizen({ shirt: 0x224466 });
 poseCitizen(citizen, { phase: Math.PI / 2, speed: 1.2 });
 assert.ok(citizen.getObjectByName("leg-left").rotation.x > 0.4);
 assert.ok(citizen.getObjectByName("leg-right").rotation.x < -0.4);
+poseCitizen(citizen, { riding: true, speed: 8 });
+assert.ok(citizen.getObjectByName("spine").rotation.x > 0.3, "the rider leans toward the bars");
+let scoot = stepScooter({ x: 0, z: 0, yaw: 0, speed: 0 }, { gas: 1, steer: 0 }, 1, [], 200);
+assert.ok(scoot.z > 2 && scoot.speed > 5, "W feeds the scooter forward");
+const steered = stepScooter({ x: 0, z: 0, yaw: 0, speed: 8 }, { gas: 1, steer: 1 }, 0.5, [], 200);
+assert.ok(steered.yaw > 0.2, "D steers the scooter");
+const braked = stepScooter({ x: 0, z: 0, yaw: 0, speed: 8 }, { gas: -1, steer: 0 }, 0.6, [], 200);
+assert.ok(braked.speed < 1, "S brakes");
+const streetGraph = buildRoadGraph(roadLanes([
+  { pts: [{ x: 0, z: 0 }, { x: 40, z: 0 }] },
+  { pts: [{ x: 40, z: 0 }, { x: 40, z: 40 }] },
+]));
+const alongStreets = routeAlongRoads(streetGraph, 0, 0, 40, 40);
+assert.ok(alongStreets.meters > 70 && alongStreets.meters < 100, "GPS follows the streets instead of cutting the corner");
+assert.ok(alongStreets.points.some((point) => Math.hypot(point.x - 40, point.z) < 10));
+const watcher = [{ lane: 0, along: 10, direction: 1, side: 1, speed: 1, x: 0, z: 10, yaw: 0 }];
+stepPedestrians(watcher, roadLanes([{ pts: [{ x: 0, z: 0 }, { x: 0, z: 40 }] }]), 1, [], { x: 2, z: 10 });
+assert.equal(watcher[0].x, 0);
+assert.equal(watcher[0].looking, true);
+const northGuide = radarGuide(0, 0, 0, -40, 70, 180);
+assert.ok(northGuide.y < 90, "the quest line points north");
+const highCam = chasePose({ x: 0, z: 0, yaw: 0, cameraLift: 0.95, lookAhead: 3.8 });
+assert.ok(highCam.y > 2.3 && highCam.lookZ > 3, "the ride camera sits high and looks down the road");
 const bike = makeScooterMesh({ color: 0x1b7a3c, hero: true });
 assert.ok(bike.getObjectByName("wheel-front").position.z > bike.getObjectByName("wheel-rear").position.z);
 assert.ok(bike.getObjectByName("headlamp"));

@@ -228,10 +228,7 @@ export function createControls(
       return;
     }
     if (mode !== "walk") return;
-    if (driveExternal) {
-      keys.jump = false;
-      return;
-    }
+    if (driveExternal) return;
     camera.getWorldDirection(lookDir);
     lookDir.y = 0;
     if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1);

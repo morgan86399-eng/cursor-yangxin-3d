@@ -3,12 +3,15 @@ import { hitsCollider } from "./player.js";
 const DISTANCES = [3.4, 2.6, 1.8, 1.1];
 
 // Camera sits behind the body and looks ahead. Yaw 0 faces +Z.
-export function chasePose({ x, z, y = 0, yaw, pitch = 0.12, colliders = [], distances = DISTANCES }) {
+export function chasePose({
+  x, z, y = 0, yaw, pitch = 0.12, colliders = [], distances = DISTANCES,
+  lookAhead = 1.4, cameraLift = 0, lookHeight = 1.35,
+}) {
   const forwardX = Math.sin(yaw);
   const forwardZ = Math.cos(yaw);
-  const lookX = x + forwardX * 1.4;
-  const lookZ = z + forwardZ * 1.4;
-  const lookY = y + 1.35 + pitch * 0.2;
+  const lookX = x + forwardX * lookAhead;
+  const lookZ = z + forwardZ * lookAhead;
+  const lookY = y + lookHeight + pitch * 0.2;
   let used = distances[distances.length - 1];
   for (const distance of distances) {
     const cx = x - forwardX * distance;
@@ -21,7 +24,7 @@ export function chasePose({ x, z, y = 0, yaw, pitch = 0.12, colliders = [], dist
   }
   return {
     x: x - forwardX * used,
-    y: y + 1.55 + Math.max(0, pitch) * 0.35,
+    y: y + 1.55 + cameraLift + Math.max(0, pitch) * 0.35,
     z: z - forwardZ * used,
     lookX,
     lookY,

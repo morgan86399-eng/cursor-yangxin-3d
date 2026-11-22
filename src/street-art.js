@@ -48,6 +48,8 @@ export function makeCitizen({ shirt = 0x2c5234, pants = 0x2a3138 } = {}) {
   const jacket = cloth(shirt);
   const yokeMat = cloth(lift(shirt));
   const trouser = cloth(pants);
+  const spine = new THREE.Group();
+  spine.name = "spine";
   const torso = new THREE.Mesh(TORSO, jacket);
   torso.position.y = 1.12;
   const yoke = new THREE.Mesh(YOKE, yokeMat);
@@ -70,13 +72,14 @@ export function makeCitizen({ shirt = 0x2c5234, pants = 0x2a3138 } = {}) {
   leftArm.position.set(-0.28, 1.32, 0);
   const rightArm = pivotLimb("arm-right", ARM, jacket, 0.24);
   rightArm.position.set(0.28, 1.32, 0);
+  spine.add(torso, yoke, head, hood, leftArm, rightArm);
   const shadow = new THREE.Mesh(SHADOW, new THREE.MeshBasicMaterial({
     color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false,
   }));
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.03;
   shadow.name = "shadow";
-  group.add(torso, yoke, head, hood, leftLeg, rightLeg, leftArm, rightArm, shadow);
+  group.add(spine, leftLeg, rightLeg, shadow);
   return group;
 }
 
@@ -102,6 +105,8 @@ export function poseCitizen(group, { phase = 0, speed = 0, riding = false } = {}
     rightArm.rotation.x = riding ? 1.05 : swing * 0.7;
     rightArm.rotation.z = riding ? -0.5 : -0.12;
   }
+  const spine = group.getObjectByName("spine");
+  if (spine) spine.rotation.x = riding ? 0.48 : 0;
   const shadow = group.getObjectByName("shadow");
   if (shadow) shadow.visible = !riding;
 }

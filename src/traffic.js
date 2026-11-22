@@ -1,4 +1,4 @@
-import { hitsCollider } from "./player.js";
+import { hitsCollider, resolveMove } from "./player.js";
 
 function approach(current, target, maxDelta) {
   const delta = target - current;
@@ -20,6 +20,11 @@ export function roadLanes(roads) {
 }
 
 function sample(lane, distance) {
+  if (Math.abs(distance - lane.length) < 1e-4) {
+    const end = lane.pts[lane.pts.length - 1];
+    const before = lane.pts[lane.pts.length - 2] || end;
+    return { x: end.x, z: end.z, yaw: Math.atan2(end.x - before.x, end.z - before.z) };
+  }
   let left = ((distance % lane.length) + lane.length) % lane.length;
   for (let i = 1; i < lane.pts.length; i += 1) {
     const a = lane.pts[i - 1];
@@ -115,6 +120,35 @@ export function parkSpot(lanes, colliders, x, z) {
   return { x, z: z + 2.6, yaw: 0 };
 }
 
+// GTA-style scooter: W gas, S brake then reverse, A/D steer the heading.
+export function stepScooter(pose, input, dt, colliders, worldRadius) {
+  const gas = input.gas || 0;
+  const steer = input.steer || 0;
+  const top = input.run ? 11 : 9;
+  const target = gas > 0 ? top : gas < 0 ? -3.2 : 0;
+  const braking = gas < 0 && (pose.speed || 0) > 0.4;
+  const accel = braking ? 16 : gas === 0 ? 4.5 : 6.5;
+  let speed = approach(pose.speed || 0, target, accel * dt);
+  const turn = (0.45 + Math.min(Math.abs(speed), 8) * 0.16) * dt * (speed < -0.2 ? -1 : 1);
+  const yaw = pose.yaw + steer * turn;
+  const next = resolveMove(
+    pose.x + Math.sin(yaw) * speed * dt,
+    pose.z + Math.cos(yaw) * speed * dt,
+    0.7,
+    colliders || [],
+    worldRadius,
+  );
+  if (next.hit) speed *= 0.25;
+  return {
+    x: next.x,
+    z: next.z,
+    yaw,
+    speed,
+    vx: Math.sin(yaw) * speed,
+    vz: Math.cos(yaw) * speed,
+  };
+}
+
 export function rideReach(x, z, scooter, reach = 2.2) {
   if (!scooter || !Number.isFinite(scooter.x) || !Number.isFinite(scooter.z)) return null;
   const distance = Math.hypot(scooter.x - x, scooter.z - z);
@@ -156,10 +190,16 @@ export function createPedestrians(lanes, colliders, count) {
   return people;
 }
 
-export function stepPedestrians(people, lanes, dt, colliders) {
+export function stepPedestrians(people, lanes, dt, colliders, lookAt) {
   for (const person of people) {
     const lane = lanes[person.lane];
     if (!lane || person.parked) continue;
+    if (lookAt && Math.hypot(person.x - lookAt.x, person.z - lookAt.z) < 3.2) {
+      person.looking = true;
+      person.yaw = Math.atan2(lookAt.x - person.x, lookAt.z - person.z);
+      continue;
+    }
+    person.looking = false;
     person.along += person.direction * person.speed * dt;
     if (person.along < 0 || person.along > lane.length) person.direction *= -1;
     person.along = Math.max(0, Math.min(lane.length, person.along));
@@ -174,4 +214,83 @@ export function stepPedestrians(people, lanes, dt, colliders) {
     person.yaw = person.direction > 0 ? pose.yaw : pose.yaw + Math.PI;
   }
   return people;
+}
+
+function connectNodes(nodes, a, b) {
+  if (a === b) return;
+  if (!nodes[a].links.includes(b)) nodes[a].links.push(b);
+  if (!nodes[b].links.includes(a)) nodes[b].links.push(a);
+}
+
+export function buildRoadGraph(lanes) {
+  const nodes = [];
+  for (const lane of lanes || []) {
+    const steps = Math.max(1, Math.ceil(lane.length / 8));
+    const ids = [];
+    for (let i = 0; i <= steps; i += 1) {
+      const pose = sample(lane, (lane.length * i) / steps);
+      ids.push(nodes.length);
+      nodes.push({ x: pose.x, z: pose.z, links: [] });
+    }
+    for (let i = 0; i < ids.length - 1; i += 1) connectNodes(nodes, ids[i], ids[i + 1]);
+  }
+  for (let i = 0; i < nodes.length; i += 1) {
+    for (let j = i + 1; j < nodes.length; j += 1) {
+      const dist = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].z - nodes[j].z);
+      if (dist < 7) connectNodes(nodes, i, j);
+    }
+  }
+  return nodes;
+}
+
+function nearestNode(nodes, x, z) {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < nodes.length; i += 1) {
+    const dist = Math.hypot(nodes[i].x - x, nodes[i].z - z);
+    if (dist < bestDist) {
+      best = i;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+export function routeAlongRoads(nodes, x, z, tx, tz) {
+  const straight = Math.hypot(tx - x, tz - z);
+  if (!nodes?.length) return { points: [{ x, z }, { x: tx, z: tz }], meters: straight };
+  const start = nearestNode(nodes, x, z);
+  const goal = nearestNode(nodes, tx, tz);
+  const dist = new Array(nodes.length).fill(Infinity);
+  const prev = new Array(nodes.length).fill(-1);
+  const used = new Array(nodes.length).fill(false);
+  dist[start] = 0;
+  while (true) {
+    let current = -1;
+    let best = Infinity;
+    for (let i = 0; i < nodes.length; i += 1) {
+      if (!used[i] && dist[i] < best) {
+        best = dist[i];
+        current = i;
+      }
+    }
+    if (current < 0 || current === goal) break;
+    used[current] = true;
+    for (const next of nodes[current].links) {
+      const weight = Math.hypot(nodes[current].x - nodes[next].x, nodes[current].z - nodes[next].z);
+      if (dist[current] + weight < dist[next]) {
+        dist[next] = dist[current] + weight;
+        prev[next] = current;
+      }
+    }
+  }
+  if (!Number.isFinite(dist[goal])) return { points: [{ x, z }, { x: tx, z: tz }], meters: straight };
+  const points = [];
+  for (let i = goal; i >= 0; i = prev[i]) {
+    points.push({ x: nodes[i].x, z: nodes[i].z });
+    if (i === start) break;
+  }
+  points.reverse();
+  points.push({ x: tx, z: tz });
+  return { points, meters: dist[goal] + Math.hypot(nodes[goal].x - tx, nodes[goal].z - tz) };
 }
