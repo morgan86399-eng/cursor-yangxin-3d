@@ -183,8 +183,9 @@ hall.group.traverse((obj) => { if (obj.material?.color?.getHex?.() === 0xe2b43a)
 assert.ok(shrineGold && templeGold && shrineGold === templeGold, "shrine roof reuses the temple gold material");
 
 const html = await readFile(join(root, "../index.html"), "utf8");
-assert.match(html, /id="skyBtn"/);
-assert.match(html, /天空俯瞰/);
+assert.doesNotMatch(html, /id="focusBtn"|id="near50Btn"|id="skyBtn"/);
+assert.match(html, /id="walkBtn"/);
+assert.match(html, /第一視角/);
 assert.doesNotMatch(html, /環景檢視|id="orbitBtn"/);
 assert.match(html, /href="\/xintian\/house\/"/);
 assert.match(html, /href="\/xintian\/"/);
