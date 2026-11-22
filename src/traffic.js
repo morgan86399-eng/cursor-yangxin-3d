@@ -130,7 +130,7 @@ export function stepScooter(pose, input, dt, colliders, worldRadius) {
   const accel = braking ? 16 : gas === 0 ? 4.5 : 6.5;
   let speed = approach(pose.speed || 0, target, accel * dt);
   const turn = (0.45 + Math.min(Math.abs(speed), 8) * 0.16) * dt * (speed < -0.2 ? -1 : 1);
-  const yaw = pose.yaw + steer * turn;
+  const yaw = pose.yaw - steer * turn;
   const next = resolveMove(
     pose.x + Math.sin(yaw) * speed * dt,
     pose.z + Math.cos(yaw) * speed * dt,
@@ -156,8 +156,8 @@ export function rideReach(x, z, scooter, reach = 2.2) {
 }
 
 export function dismountSpot(x, z, yaw, colliders) {
-  const rightX = Math.cos(yaw);
-  const rightZ = -Math.sin(yaw);
+  const rightX = -Math.cos(yaw);
+  const rightZ = Math.sin(yaw);
   for (const side of [1, -1]) {
     const px = x + rightX * 1.15 * side;
     const pz = z + rightZ * 1.15 * side;

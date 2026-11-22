@@ -162,7 +162,11 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
       return;
     }
     const state = controls.getState();
-    if (rideReach(state.x, state.z, parked) == null) return;
+    if (rideReach(state.x, state.z, parked) == null) {
+      parked.x = state.x;
+      parked.z = state.z;
+      parked.yaw = yawState.yaw;
+    }
     rider = createPlayerState(parked.x, parked.z, { eyeHeight: RIDE.eyeHeight });
     yawState.yaw = parked.yaw;
     followYaw = parked.yaw;
@@ -185,7 +189,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   let camYaw = yawState.yaw;
   let lookOffset = 0;
   let lookHold = 0;
-  controls.setLookHook((dx, dy) => {
+  function onLookDelta(dx, dy) {
     if (api.riding) {
       lookOffset = Math.max(-1.15, Math.min(1.15, lookOffset - dx * 0.004));
       lookHold = 0.55;
@@ -193,6 +197,12 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
       camYaw -= dx * 0.004;
     }
     yawState.pitch = clampPitch(yawState.pitch - dy * 0.003);
+  }
+  controls.setLookHook(onLookDelta);
+  document.addEventListener("mousemove", (event) => {
+    if (controls.getMode() === "walk" && controls.getState().locked) {
+      onLookDelta(event.movementX || 0, event.movementY || 0);
+    }
   });
 
   const lookDir = new THREE.Vector3();
@@ -224,7 +234,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
       camera.position.set(state.x, eyeY, state.z);
       camera.lookAt(
         state.x + Math.sin(followYaw) * Math.cos(yawState.pitch) * 6,
-        eyeY - Math.sin(yawState.pitch) * 4,
+        eyeY + Math.sin(yawState.pitch) * 4,
         state.z + Math.cos(followYaw) * Math.cos(yawState.pitch) * 6,
       );
       return;
@@ -299,8 +309,8 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
       controls.setKeys({ jump: false });
       const fx = Math.sin(followYaw);
       const fz = Math.cos(followYaw);
-      const rx = Math.cos(followYaw);
-      const rz = -Math.sin(followYaw);
+      const rx = -Math.cos(followYaw);
+      const rz = Math.sin(followYaw);
       const mx = input.forward * fx + input.strafe * rx;
       const mz = input.forward * fz + input.strafe * rz;
       const mag = Math.hypot(mx, mz);
@@ -315,7 +325,9 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
         rightX: rx,
         rightZ: rz,
       }, dt, colliders, worldRadius);
-      if (Math.hypot(stepped.vx, stepped.vz) > 0.45) {
+      if (api.firstPerson) {
+        yawState.yaw = followYaw;
+      } else if (Math.hypot(stepped.vx, stepped.vz) > 0.45) {
         yawState.yaw = dampYaw(yawState.yaw, Math.atan2(stepped.vx, stepped.vz), dt * 12);
       }
       controls.setState({

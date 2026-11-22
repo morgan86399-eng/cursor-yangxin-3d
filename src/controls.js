@@ -147,8 +147,9 @@ export function createControls(
     }
     if (down && e.target instanceof Element) {
       if (e.target.closest("input, textarea, select, [contenteditable]")) return;
-      // A clicked walk button keeps focus; only Space needs its native button action.
-      if (e.code === "Space" && e.target.closest("button")) return;
+      if (e.code === "Space" && e.target.closest("button")) {
+        e.target.closest("button")?.blur?.();
+      }
     }
     const code = e.code;
     if (code === "KeyW" || code === "ArrowUp") keys.w = down;

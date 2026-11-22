@@ -26,7 +26,9 @@ assert.ok(citizen.getObjectByName("spine").rotation.x > 0.3, "the rider leans to
 let scoot = stepScooter({ x: 0, z: 0, yaw: 0, speed: 0 }, { gas: 1, steer: 0 }, 1, [], 200);
 assert.ok(scoot.z > 2 && scoot.speed > 5, "W feeds the scooter forward");
 const steered = stepScooter({ x: 0, z: 0, yaw: 0, speed: 8 }, { gas: 1, steer: 1 }, 0.5, [], 200);
-assert.ok(steered.yaw > 0.2, "D steers the scooter");
+assert.ok(steered.yaw < -0.2 && steered.x < 0, "D steers the scooter to screen-right (-X when facing +Z)");
+const steeredLeft = stepScooter({ x: 0, z: 0, yaw: 0, speed: 8 }, { gas: 1, steer: -1 }, 0.5, [], 200);
+assert.ok(steeredLeft.yaw > 0.2 && steeredLeft.x > 0, "A steers the scooter to screen-left (+X when facing +Z)");
 const braked = stepScooter({ x: 0, z: 0, yaw: 0, speed: 8 }, { gas: -1, steer: 0 }, 0.6, [], 200);
 assert.ok(braked.speed < 1, "S brakes");
 const streetGraph = buildRoadGraph(roadLanes([

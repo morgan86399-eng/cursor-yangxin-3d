@@ -480,6 +480,7 @@ async function boot() {
   canvas.addEventListener("pointerup", () => { lookDrag = null; });
   canvas.addEventListener("pointercancel", () => { lookDrag = null; });
   canvas.addEventListener("pointerleave", () => { lookDrag = null; });
+  window.addEventListener("pointerup", () => { lookDrag = null; });
   window.addEventListener("blur", () => { lookDrag = null; });
 
   let landmarkWalk = null;

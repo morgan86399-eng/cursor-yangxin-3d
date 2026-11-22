@@ -85,7 +85,7 @@ export function drawRadar(canvas, { px, pz, yaw = 0, blips = [], range = 70, gui
   }
   ctx.save();
   ctx.translate(center, center);
-  ctx.rotate(-yaw);
+  ctx.rotate(Math.PI - yaw);
   ctx.fillStyle = "#f4f1ea";
   ctx.beginPath();
   ctx.moveTo(0, -7);
