@@ -26,9 +26,20 @@ function faceAlong(mesh, yaw) {
 
 const QUEST_BLIP_KEYS = ["yashan", "chaoyang", "market", "stall", "activity", "station", "shrine"];
 
-export function mountStreetLife({ scene, camera, renderer, controls, roads, colliders, questAnchors, questBlips, worldRadius = 220 }) {
-  const enabled = new URLSearchParams(globalThis.location?.search || "").get("life") === "1";
-  const api = { enabled, riding: false, hour: 17.5, prepare() {}, update() {} };
+export function mountStreetLife({ scene, camera, renderer, controls, roads, colliders, questAnchors, questBlips, worldRadius = 220, onFirstPersonChange }) {
+  const searchParams = new URLSearchParams(globalThis.location?.search || "");
+  const lifeParam = searchParams.get("life");
+  const viewParam = searchParams.get("view");
+  const enabled = Boolean(scene && controls) && lifeParam !== "0" && (lifeParam === "1" || viewParam !== "sky");
+  const api = {
+    enabled,
+    riding: false,
+    firstPerson: false,
+    hour: 17.5,
+    setFirstPerson() {},
+    prepare() {},
+    update() {},
+  };
   if (!enabled) return api;
 
   const yawState = { yaw: 0, pitch: 0.15 };
@@ -69,7 +80,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   scene.add(actors);
 
   const style = document.createElement("style");
-  style.textContent = "#street-life{position:fixed;right:16px;bottom:96px;z-index:6;display:grid;gap:8px;justify-items:end;font:13px/1.4 'Noto Sans TC',sans-serif;color:#f4f1ea}#street-life[hidden]{display:none}#street-life canvas{width:148px;height:148px;border-radius:50%}#street-life .row{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;max-width:220px}#street-life button{min-height:36px;border:0;border-radius:999px;padding:6px 10px;background:#2c5234;color:#f4f1ea;cursor:pointer}#rideSpeed,#questGuide{background:rgba(18,16,12,.78);border-radius:999px;padding:4px 10px}#street-grade{position:fixed;inset:0;z-index:3;pointer-events:none;background:radial-gradient(ellipse at center, transparent 58%, rgba(12,8,6,.2) 100%)}#street-grade[hidden]{display:none}#street-grade[data-time='dusk']{background:radial-gradient(ellipse at center, transparent 50%, rgba(64,22,8,.38) 100%)}#street-grade[data-time='night']{background:radial-gradient(ellipse at center, transparent 42%, rgba(2,6,14,.5) 100%)}";
+  style.textContent = "#street-life{position:fixed;right:16px;bottom:96px;z-index:6;display:grid;gap:8px;justify-items:end;font:13px/1.4 'Noto Sans TC',sans-serif;color:#f4f1ea}#street-life[hidden]{display:none}#street-life canvas{width:148px;height:148px;border-radius:50%}#street-life .row{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;max-width:220px}#street-life button{min-height:36px;border:0;border-radius:999px;padding:6px 10px;background:#2c5234;color:#f4f1ea;cursor:pointer}#street-life button.is-on{background:#c4894a;color:#1c120a;font-weight:700}#rideSpeed,#questGuide{background:rgba(18,16,12,.78);border-radius:999px;padding:4px 10px}#street-grade{position:fixed;inset:0;z-index:3;pointer-events:none;background:radial-gradient(ellipse at center, transparent 58%, rgba(12,8,6,.2) 100%)}#street-grade[hidden]{display:none}#street-grade[data-time='dusk']{background:radial-gradient(ellipse at center, transparent 50%, rgba(64,22,8,.38) 100%)}#street-grade[data-time='night']{background:radial-gradient(ellipse at center, transparent 42%, rgba(2,6,14,.5) 100%)}";
   document.head.append(style);
   const grade = document.createElement("div");
   grade.id = "street-grade";
@@ -97,13 +108,33 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   rideBtn.textContent = "騎機車";
   panel.append(hours, rideBtn, radar);
   document.body.append(panel);
+  const hourButtons = [];
+  function syncHourButtons() {
+    for (const item of hourButtons) {
+      const active = Math.abs(api.hour - item.hour) < 0.5;
+      item.button.classList.toggle("is-on", active);
+      item.button.setAttribute("aria-pressed", String(active));
+    }
+  }
   for (const preset of DAY_HOURS) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = preset.name;
-    button.addEventListener("click", () => { api.hour = preset.hour; });
+    button.addEventListener("click", () => {
+      api.hour = preset.hour;
+      syncHourButtons();
+    });
     hours.append(button);
+    hourButtons.push({ hour: preset.hour, button });
   }
+  syncHourButtons();
+
+  api.setFirstPerson = (next) => {
+    const want = Boolean(next);
+    if (want && api.riding) endRide();
+    api.firstPerson = want;
+    onFirstPersonChange?.(api.firstPerson);
+  };
 
   function endRide() {
     if (!api.riding || !rider) {
@@ -137,6 +168,10 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
     followYaw = parked.yaw;
     rideSpeed = 0;
     api.riding = true;
+    if (api.firstPerson) {
+      api.firstPerson = false;
+      onFirstPersonChange?.(false);
+    }
     controls.setDriveExternal(true);
     rideBtn.textContent = "下車";
   }
@@ -183,6 +218,17 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   }
 
   function placeCamera(state, dt) {
+    if (api.firstPerson && !api.riding) {
+      followYaw = dampYaw(followYaw, camYaw, dt * 14);
+      const eyeY = state.y + eyeHeight + (state.bob || 0);
+      camera.position.set(state.x, eyeY, state.z);
+      camera.lookAt(
+        state.x + Math.sin(followYaw) * Math.cos(yawState.pitch) * 6,
+        eyeY - Math.sin(yawState.pitch) * 4,
+        state.z + Math.cos(followYaw) * Math.cos(yawState.pitch) * 6,
+      );
+      return;
+    }
     if (api.riding) {
       if (lookHold > 0) lookHold -= dt;
       else lookOffset = dampYaw(lookOffset, 0, dt * 3.5);
@@ -346,10 +392,10 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
       grade.hidden = true;
       return;
     }
-    if (state.locked) controls.setLookLocked(false);
+    if (!api.firstPerson && state.locked) controls.setLookLocked(false);
     panel.hidden = false;
     grade.hidden = false;
-    body.visible = true;
+    body.visible = !api.firstPerson || api.riding;
     const pace = api.riding ? Math.abs(rideSpeed) : Math.hypot(state.vx || 0, state.vz || 0);
     body.userData.phase = (body.userData.phase || 0) + dt * (api.riding ? 0 : pace) * 6.5;
     poseCitizen(body, { phase: body.userData.phase, speed: pace, riding: api.riding });

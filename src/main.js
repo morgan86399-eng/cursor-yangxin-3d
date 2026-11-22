@@ -27,6 +27,8 @@ import { createQuestMarkers } from "./quest-markers.js";
 import { createQuestPads } from "./quest-pads.js";
 import { createNpcs } from "./npcs.js";
 import { createWaysideShrines } from "./worship.js";
+import { batchStaticMeshes } from "./static-batch.js";
+import { mergeWallTextures } from "./wall-texture-array.js";
 import { mountStreetLife } from "./street-life.js";
 
 const statusEl = document.getElementById("status");
@@ -61,7 +63,7 @@ const initialParams = new URLSearchParams(window.location.search);
 const initialView = initialParams.get("view");
 const initialBuildingId = initialParams.get("building");
 const initialFacadeMode = normalizeFacadeMode(initialParams.get("facade"));
-const lifeOn = initialParams.get("life") === "1";
+const lifeOn = initialParams.get("life") !== "0" && initialView !== "sky";
 
 function setStatus(text) {
   if (statusEl) statusEl.textContent = text;
@@ -177,6 +179,20 @@ async function boot() {
   const signs = createSigns(shops, network.roads, project, config.radiusMeters, world.colliders);
   scene.add(signs.group);
   // The address and focus control live in the HUD; a floating roof billboard distorts street scale.
+
+  // Everything above is built once and never moves. Quest, NPC and farm meshes are added later and stay separate.
+  const staticBatch = { enabled: initialParams.get("batch") !== "off", meshesBefore: 0, meshesAfter: 0, merged: 0, batches: 0, walls: null };
+  if (staticBatch.enabled) {
+    const batchStart = performance.now();
+    staticBatch.walls = mergeWallTextures(world.group);
+    staticBatch.wallMs = Math.round(performance.now() - batchStart);
+    for (const root of [network.group, world.group, openSpace.group, shrines.group, streetProps, signs.group]) {
+      if (!root?.parent) continue;
+      const result = batchStaticMeshes(root);
+      for (const key of ["meshesBefore", "meshesAfter", "merged", "batches"]) staticBatch[key] += result[key];
+    }
+    staticBatch.buildMs = Math.round(performance.now() - batchStart);
+  }
 
   const questAnchors = bindQuestAnchors({
     landmarkViews: world.landmarkViews,
@@ -337,20 +353,21 @@ async function boot() {
     colliders: world.colliders,
     roads: network.roads,
     onMode(mode) {
-      skyBtn.classList.toggle("is-on", mode === "sky");
+      skyBtn?.classList.toggle("is-on", mode === "sky");
       skyBtn?.setAttribute("aria-pressed", String(mode === "sky"));
-      walkBtn.classList.toggle("is-on", mode === "walk");
-      walkBtn?.setAttribute("aria-pressed", String(mode === "walk"));
-      lockBtn.hidden = mode !== "walk" || lifeOn;
-      crosshairEl?.classList.toggle("is-on", mode === "walk" && !lifeOn);
+      const fpActive = mode === "walk" && (!lifeOn || Boolean(streetLife?.firstPerson));
+      walkBtn.classList.toggle("is-on", fpActive);
+      walkBtn?.setAttribute("aria-pressed", String(fpActive));
+      lockBtn.hidden = !fpActive;
+      crosshairEl?.classList.toggle("is-on", fpActive);
       hintEl.textContent =
         mode === "walk"
           ? (lifeOn
-            ? "走路：WASD 相對鏡頭移動，人會轉向走的方向，拖曳只轉動鏡頭。機車：F 上下車，W 加油、S 煞車、A D 轉車頭，拖曳暫時看旁邊。雷達黃線沿著街道通往任務，E 仍是任務。"
+            ? "走路：WASD 相對鏡頭移動，人會轉向走的方向，拖曳只轉動鏡頭。機車：F 上下車，W 加油、S 煞車、A D 轉車頭，拖曳暫時看旁邊。點「第一視角」可切換第一／第三人稱，雷達黃線沿著街道通往任務，E 仍是任務。"
             : "WASD 移動、空白鍵跳躍、Shift 跑步；拖曳畫面轉頭。需要連續轉頭時，可自行鎖定滑鼠，按 Esc 釋放。")
           : mode === "sky"
             ? "天空俯瞰：拖曳平移、滾輪縮放。點「第一視角」走到街上。"
-            : "可改「天空俯瞰」或「第一視角」。";
+            : "點「第一視角」回到街上移動。";
     },
     onLock(locked) {
       lockBtn.textContent = locked ? "按 Esc 解鎖" : "鎖定滑鼠";
@@ -437,11 +454,11 @@ async function boot() {
   }
   function setNear50Panel(open) {
     near50Panel.hidden = !open;
-    near50Btn.setAttribute("aria-expanded", String(open));
+    near50Btn?.setAttribute("aria-expanded", String(open));
     if (open) near50Close.focus();
-    else near50Btn.focus();
+    else near50Btn?.focus();
   }
-  near50Btn.addEventListener("click", () => setNear50Panel(near50Panel.hidden));
+  near50Btn?.addEventListener("click", () => setNear50Panel(near50Panel.hidden));
   near50Close.addEventListener("click", () => setNear50Panel(false));
   const farm = createCourtyardFarm(scene, world.zhenfu, controls, { camera });
 
@@ -617,15 +634,23 @@ async function boot() {
     return true;
   }
 
-  focusBtn.addEventListener("click", () => {
+  focusBtn?.addEventListener("click", () => {
     if (frameNo46()) setStatus("鎮撫街46號：1樓雅善圓、2樓桃園養心推拿");
   });
-  skyBtn.addEventListener("click", () => {
+  skyBtn?.addEventListener("click", () => {
     landmarkWalk = null;
     controls.setMode("sky", { x: 0, z: 0, height: 180 });
     setStatus("天空俯瞰：拖曳平移、滾輪縮放");
   });
   walkBtn.addEventListener("click", () => {
+    if (lifeOn && streetLife?.enabled && controls.getMode() === "walk") {
+      const nextFp = !streetLife.firstPerson;
+      streetLife.setFirstPerson(nextFp);
+      setStatus(nextFp
+        ? "第一視角：WASD 移動、拖曳畫面轉頭；再點一次可切回第三人稱街景"
+        : "第三人稱街景：WASD 移動、F 上下機車、E 互動任務");
+      return;
+    }
     setStatus("第一視角：WASD 移動、空白鍵跳躍。撞到建物會停住");
     enterWalkHere();
   });
@@ -777,6 +802,7 @@ async function boot() {
       },
     },
     openSpace: openSpace.group.userData,
+    staticBatch,
     zhenfu: world.zhenfu || null,
     farm,
     renderQuality: {
@@ -826,7 +852,21 @@ async function boot() {
     questAnchors,
     questBlips: () => questMarkerPoints(questProgress, questAnchors),
     worldRadius: Math.max(config.radiusMeters, PARK_WALK_REACH),
+    onFirstPersonChange(fp) {
+      const fpActive = controls.getMode() === "walk" && fp;
+      walkBtn.classList.toggle("is-on", fpActive);
+      walkBtn?.setAttribute("aria-pressed", String(fpActive));
+      lockBtn.hidden = !fpActive;
+      crosshairEl?.classList.toggle("is-on", fpActive);
+      if (!fpActive && controls.getState().locked) controls.setLookLocked(false);
+    },
   });
+  if (streetLife.enabled) {
+    walkBtn.classList.toggle("is-on", Boolean(streetLife.firstPerson));
+    walkBtn?.setAttribute("aria-pressed", String(Boolean(streetLife.firstPerson)));
+    lockBtn.hidden = !streetLife.firstPerson;
+    crosshairEl?.classList.toggle("is-on", Boolean(streetLife.firstPerson));
+  }
 
   const clock = new THREE.Clock();
   function tick() {

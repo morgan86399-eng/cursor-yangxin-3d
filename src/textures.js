@@ -5,6 +5,8 @@ const font = "bold 42px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-s
 const fontSmall = "28px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
 
 const cache = new Map();
+// Wall canvases are read back once to build the array texture; a CPU-backed canvas makes that read cheap.
+const CANVAS_2D = { willReadFrequently: true };
 
 export function hash01(x, y = 0) {
   if (typeof x === "string") {
@@ -425,7 +427,7 @@ export function makeSignTexture(name, sub, color) {
     const canvas = document.createElement("canvas");
     canvas.width = 768;
     canvas.height = 256;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = "#2a2622";
     ctx.fillRect(0, 0, 768, 256);
     ctx.fillStyle = color || "#3a4a6b";
@@ -457,7 +459,7 @@ export function makeStreetBannerTexture(text, bg = "#1b7a3c") {
     const canvas = document.createElement("canvas");
     canvas.width = 1024;
     canvas.height = 220;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, 1024, 220);
     ctx.strokeStyle = "#e6c15a";
@@ -479,7 +481,7 @@ export function makeYashanyuanFasciaTexture(aspect) {
     const canvas = document.createElement("canvas");
     canvas.width = 1200;
     canvas.height = height;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = "#2f4f2c";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = "#4d7a45";
@@ -499,7 +501,7 @@ export function makeYangxinPlaqueTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = 640;
     canvas.height = 200;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = "#f4efe4";
     ctx.fillRect(0, 0, 640, 200);
     ctx.strokeStyle = "#6b4a2c";
@@ -523,7 +525,7 @@ export function makeBrownTileTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = "#786957";
     ctx.fillRect(0, 0, w, h);
     const shades = ["#a9977e", "#aa9984", "#a3927c", "#b1a08a", "#a79680"];
@@ -546,7 +548,7 @@ export function makePaleCladdingTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = "#b7c5ce";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#8ea3ae";
@@ -562,7 +564,7 @@ export function makeNo46UpperTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     fillNoise(ctx, w, h, "#ddcbb1", 9);
     ctx.fillStyle = "rgba(103, 80, 57, 0.13)";
     for (let x = 0; x < w; x += 48) ctx.fillRect(x, 0, 2, h);
@@ -577,7 +579,7 @@ export function makeVerticalSignTexture(name, color) {
     const canvas = document.createElement("canvas");
     canvas.width = 220;
     canvas.height = 768;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = "#2a2622";
     ctx.fillRect(0, 0, 220, 768);
     ctx.fillStyle = color || "#8b2c24";
@@ -602,7 +604,7 @@ export function makePavementDetail() {
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     const img = ctx.createImageData(size, size);
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -653,7 +655,7 @@ export function makeMassingTexture(kind = "apartment") {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = commercial ? "#cbb79a" : "#d7d2c8";
     ctx.fillRect(0, 0, w, h);
     const floors = 4;
@@ -683,7 +685,7 @@ export function makeUpperFloorTexture(hex, seed = 0, kind = "house", style = "pa
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     paintWall(ctx, w, h, hex, seed, kind === "temple" ? "temple" : style);
     ctx.fillStyle = "rgba(0,0,0,0.16)";
     ctx.fillRect(0, h - 10, w, 10);
@@ -747,7 +749,7 @@ export function makeStorefrontTexture(hex, seed = 0, kind = "house", style = "pa
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     paintWall(ctx, w, h, hex, seed, kind === "temple" ? "temple" : style);
 
     // A street-front shop texture repeated around an entire footprint paints
@@ -819,7 +821,7 @@ export function makeMetalCapTexture(hex, seed = 0) {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     drawCorrugated(ctx, w, h, metalHex, seed);
     drawTaiwanWindow(ctx, 40, 28, 54, 54, seed, { bars: false, split: false });
     if (hash01(seed, 4) > 0.4) drawTaiwanWindow(ctx, 150, 28, 54, 54, seed + 2, { bars: false, split: false });
@@ -838,7 +840,7 @@ export function makeZebraTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.clearRect(0, 0, w, h);
     const bars = 10;
     const bar = w / bars;
@@ -859,7 +861,7 @@ export function makeShopSignTexture(shop) {
     const canvas = document.createElement("canvas");
     canvas.width = 1024;
     canvas.height = 256;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = "#1c1a18";
     ctx.fillRect(0, 0, 1024, 256);
     ctx.textAlign = "center";
@@ -974,7 +976,7 @@ export function makeNamedStorefrontTexture(name, hex, seed = 0, kind = "house") 
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     paintWall(ctx, w, h, hex, seed, kind === "restaurant" || kind === "cafe" ? "arcade" : "paint");
     ctx.fillStyle = "rgba(20,16,12,0.92)";
     ctx.fillRect(0, 0, w, 58);
@@ -1034,7 +1036,7 @@ export function makeBrandStorefrontTexture(brand, seed = 0) {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     if (brand === "seven") {
@@ -1142,7 +1144,7 @@ export function makeYashanYuanStorefrontTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     fillNoise(ctx, w, h, "#3a2c24", 10);
     ctx.fillStyle = "#14181c";
     ctx.fillRect(28, 36, w - 56, h - 72);
@@ -1159,7 +1161,7 @@ export function makeYangxinUpperTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     fillNoise(ctx, w, h, "#e6d7c4", 12);
     drawTaiwanWindow(ctx, 48, 48, 220, 220, 2, { bars: false, split: true, lit: true });
     drawTaiwanWindow(ctx, 500, 48, 220, 220, 3, { bars: false, split: true, lit: true });
@@ -1174,7 +1176,7 @@ export function makeSolidWallTexture(hex) {
     const canvas = document.createElement("canvas");
     canvas.width = 8;
     canvas.height = 8;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = hex;
     ctx.fillRect(0, 0, 8, 8);
     return toCanvasTex(canvas, { wrap: true, anisotropy: 2 });
@@ -1186,7 +1188,7 @@ export function makeRoadWordTexture(text) {
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 180;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.clearRect(0, 0, 512, 180);
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.textAlign = "center";
@@ -1202,7 +1204,7 @@ export function makeFulongBoardTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = 1024;
     canvas.height = 420;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     ctx.fillStyle = "#c42822";
     ctx.fillRect(0, 0, 1024, 420);
     ctx.fillStyle = "#f4f1ea";
@@ -1240,7 +1242,7 @@ export function makeNeighborShellTexture(hex = "#efe4cf", style = "tile") {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", CANVAS_2D);
     if (style === "brick") {
       ctx.fillStyle = hex;
       ctx.fillRect(0, 0, w, h);

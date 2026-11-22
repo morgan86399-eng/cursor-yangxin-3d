@@ -147,6 +147,7 @@ function makeLamp() {
     new THREE.MeshBasicMaterial({ color: 0xffe7b0, toneMapped: false })
   );
   bulb.position.set(0, 5.2, 0.55);
+  bulb.userData = { streetLamp: true };
   g.add(pole, arm, bulb);
   return g;
 }

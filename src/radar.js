@@ -36,9 +36,18 @@ export function drawRadar(canvas, { px, pz, yaw = 0, blips = [], range = 70, gui
   ctx.strokeStyle = "rgba(212, 175, 55, 0.9)";
   ctx.lineWidth = 2;
   ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(center, center, size * 0.24, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
   ctx.fillStyle = "rgba(255,255,255,0.18)";
   ctx.fillRect(center - 0.5, center - size * 0.46, 1, size * 0.92);
   ctx.fillRect(center - size * 0.46, center - 0.5, size * 0.92, 1);
+  ctx.fillStyle = "rgba(244, 241, 234, 0.85)";
+  ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("N", center, 15);
   if (route?.length > 1) {
     ctx.beginPath();
     ctx.strokeStyle = "rgba(226, 177, 58, 0.95)";

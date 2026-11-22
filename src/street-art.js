@@ -288,6 +288,12 @@ export function makeScooterMesh({ color = 0x1e3d72, hero = false } = {}) {
   seat.position.set(0, 0.74, -0.02);
   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.46, 6), METAL);
   stem.position.set(0, 0.84, 0.94);
+  const forkL = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.48, 6), METAL);
+  forkL.name = "fork-left";
+  forkL.position.set(-0.11, 0.5, 0.98);
+  const forkR = forkL.clone();
+  forkR.name = "fork-right";
+  forkR.position.x = 0.11;
   const bar = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.08, 0.08), METAL);
   bar.name = "handlebar";
   bar.position.set(0, 1.06, 1.02);
@@ -295,6 +301,12 @@ export function makeScooterMesh({ color = 0x1e3d72, hero = false } = {}) {
   grip.position.set(-0.5, 1.06, 1.02);
   const gripR = grip.clone();
   gripR.position.x = 0.52;
+  const mirrorL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.04), METAL);
+  mirrorL.name = "mirror-left";
+  mirrorL.position.set(-0.56, 1.2, 1.0);
+  const mirrorR = mirrorL.clone();
+  mirrorR.name = "mirror-right";
+  mirrorR.position.x = 0.56;
   const peg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.1), METAL);
   peg.position.set(-0.26, 0.32, 0.32);
   const pegR = peg.clone();
@@ -307,8 +319,12 @@ export function makeScooterMesh({ color = 0x1e3d72, hero = false } = {}) {
   const tailLamp = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.09, 0.05), TAIL);
   tailLamp.position.set(0, 0.72, -0.64);
   tailLamp.name = "tail-lamp";
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.11, 0.02), cloth(0xf4f1ea));
+  plate.name = "plate";
+  plate.position.set(0, 0.5, -0.92);
   group.add(
-    front, rear, deck, tail, fender, shield, seat, stem, bar, grip, gripR, peg, pegR, visor, headlamp, tailLamp,
+    front, rear, deck, tail, fender, shield, seat, stem, forkL, forkR,
+    bar, grip, gripR, mirrorL, mirrorR, peg, pegR, visor, headlamp, tailLamp, plate,
   );
   if (hero) group.add(headlightPool());
   return group;
