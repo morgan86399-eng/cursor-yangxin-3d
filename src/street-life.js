@@ -42,7 +42,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   const ambient = scene.children.find((node) => node.isAmbientLight);
   const hemi = scene.children.find((node) => node.isHemisphereLight);
 
-  const body = makeCitizen({ shirt: 0x6e8f62, pants: 0x2a3138 });
+  const body = makeCitizen({ shirt: 0x6e8f62, pants: 0x2a3138, pack: true });
   const rideMesh = makeScooterMesh({ color: 0x1b7a3c, hero: true });
   rideMesh.name = "ride-scooter";
   scene.add(body, rideMesh);
@@ -59,7 +59,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
     return mesh;
   });
   const pedMeshes = people.map((_, index) => {
-    const mesh = makeCitizen({ shirt: SHIRTS[index % SHIRTS.length] });
+    const mesh = makeCitizen({ shirt: SHIRTS[index % SHIRTS.length], hood: false });
     mesh.scale.setScalar(0.94 + (index % 3) * 0.03);
     actors.add(mesh);
     return mesh;
