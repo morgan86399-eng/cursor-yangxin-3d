@@ -1,9 +1,9 @@
 // Four looks, in the spirit of a GTA time-of-day grade: the models stay, the light changes.
 const PRESETS = [
-  { hour: 7, name: "早晨", skyTop: 0x8eb8d6, skyHorizon: 0xf0d2b4, skyGround: 0xc2b6a4, fog: 0xe7d3c0, fogNear: 110, fogFar: 360, sun: [0.55, 0.28, 0.35], sunColor: 0xffd2a4, sunIntensity: 0.72, ambient: 0.38, lamp: 0.15, exposure: 1.02 },
-  { hour: 12, name: "中午", skyTop: 0x7eb0d4, skyHorizon: 0xdce7ef, skyGround: 0xc2b6a4, fog: 0xc5d6e4, fogNear: 105, fogFar: 340, sun: [0.42, 0.72, 0.28], sunColor: 0xfff1d6, sunIntensity: 0.98, ambient: 0.46, lamp: 0, exposure: 1.08 },
-  { hour: 17.5, name: "傍晚", skyTop: 0x3d5f86, skyHorizon: 0xf0a06a, skyGround: 0x8a6a52, fog: 0xc48a66, fogNear: 90, fogFar: 340, sun: [0.78, 0.16, 0.22], sunColor: 0xffb07a, sunIntensity: 0.62, ambient: 0.28, lamp: 0.85, exposure: 0.96 },
-  { hour: 21, name: "夜晚", skyTop: 0x121826, skyHorizon: 0x243044, skyGround: 0x1a1816, fog: 0x1c2430, fogNear: 70, fogFar: 320, sun: [-0.2, -0.4, 0.1], sunColor: 0x9bb4d6, sunIntensity: 0.08, ambient: 0.16, lamp: 1, exposure: 0.86 },
+  { hour: 7, name: "早晨", skyTop: 0x8eb8d6, skyHorizon: 0xf0d2b4, skyGround: 0xc2b6a4, fog: 0xe7d3c0, fogNear: 110, fogFar: 360, sun: [0.55, 0.28, 0.35], sunColor: 0xffd2a4, sunIntensity: 0.72, ambient: 0.38, hemi: 0.24, fill: 0.16, lamp: 0.15, exposure: 1.02 },
+  { hour: 12, name: "中午", skyTop: 0x7eb0d4, skyHorizon: 0xdce7ef, skyGround: 0xc2b6a4, fog: 0xc5d6e4, fogNear: 105, fogFar: 340, sun: [0.42, 0.72, 0.28], sunColor: 0xfff1d6, sunIntensity: 0.98, ambient: 0.46, hemi: 0.28, fill: 0.2, lamp: 0, exposure: 1.08 },
+  { hour: 17.5, name: "傍晚", skyTop: 0x243858, skyHorizon: 0xe97848, skyGround: 0x6a4034, fog: 0xb56a48, fogNear: 80, fogFar: 340, sun: [0.86, 0.1, 0.18], sunColor: 0xff8a4a, sunIntensity: 0.7, ambient: 0.22, hemi: 0.12, fill: 0.06, lamp: 0.9, exposure: 0.98 },
+  { hour: 21, name: "夜晚", skyTop: 0x0c121c, skyHorizon: 0x1a2436, skyGround: 0x12100e, fog: 0x141a24, fogNear: 55, fogFar: 320, sun: [-0.2, -0.4, 0.1], sunColor: 0x8aa4c8, sunIntensity: 0.05, ambient: 0.1, hemi: 0.05, fill: 0.025, lamp: 1, exposure: 0.78 },
 ];
 
 export function daylightPreset(hour) {
@@ -36,6 +36,8 @@ export function daylightPreset(hour) {
     sunColor: mixHex(prev.sunColor, next.sunColor),
     sunIntensity: prev.sunIntensity + (next.sunIntensity - prev.sunIntensity) * t,
     ambient: prev.ambient + (next.ambient - prev.ambient) * t,
+    hemi: prev.hemi + (next.hemi - prev.hemi) * t,
+    fill: prev.fill + (next.fill - prev.fill) * t,
     lamp: prev.lamp + (next.lamp - prev.lamp) * t,
     exposure: prev.exposure + (next.exposure - prev.exposure) * t,
   };
@@ -62,6 +64,8 @@ export function applyDaylight(world, hour) {
     sun.position.set(look.sun[0], Math.max(look.sun[1], -0.2), look.sun[2]).multiplyScalar(140);
   }
   if (ambient) ambient.intensity = look.ambient;
+  if (world.hemi) world.hemi.intensity = look.hemi;
+  if (world.fill) world.fill.intensity = look.fill;
   if (renderer) renderer.toneMappingExposure = look.exposure;
   for (const lamp of lamps || []) {
     lamp.material.color.setHex(look.lamp > 0.4 ? 0xffe7b0 : 0x4a463c);

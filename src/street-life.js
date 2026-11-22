@@ -4,54 +4,11 @@ import { applyDaylight, DAY_HOURS } from "./daylight.js";
 import { chasePose, clampPitch } from "./follow-camera.js";
 import { drawRadar } from "./radar.js";
 import { createPedestrians, createVehicles, dismountSpot, parkSpot, rideReach, roadLanes, stepPedestrians, stepVehicles } from "./traffic.js";
+import { CAR_COLORS, makeCarMesh, makeCitizen, makeScooterMesh, poseCitizen, SHIRTS, SIT_DROP } from "./street-art.js";
 
 const RIDE = { radius: 0.7, walkSpeed: 9, runSpeed: 11.5, eyeHeight: 1.45, jumpSpeed: 0 };
 const RIDE_CAMERA = [4.8, 3.6, 2.4, 1.4];
-
-function makeWalker() {
-  const group = new THREE.Group();
-  const cloth = new THREE.MeshLambertMaterial({ color: 0x2c5234 });
-  const skin = new THREE.MeshLambertMaterial({ color: 0xe0b090 });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.85, 8), cloth);
-  body.position.y = 0.78;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), skin);
-  head.position.y = 1.38;
-  group.add(body, head);
-  return group;
-}
-
-function makeScooter(color = 0x1e3d72) {
-  const group = new THREE.Group();
-  const body = new THREE.MeshLambertMaterial({ color });
-  const dark = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.07, 0.32), body);
-  deck.position.y = 0.32;
-  const shell = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.32, 0.42), body);
-  shell.position.set(-0.18, 0.55, 0);
-  const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.07, 8), dark);
-  wheel.rotation.z = Math.PI / 2;
-  const front = wheel.clone();
-  front.position.set(0.42, 0.18, 0);
-  const back = wheel.clone();
-  back.position.set(-0.42, 0.18, 0);
-  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.1), new THREE.MeshBasicMaterial({ color: 0xffe7b0, toneMapped: false }));
-  lamp.position.set(0.5, 0.55, 0);
-  lamp.name = "headlamp";
-  group.add(deck, shell, front, back, lamp);
-  return group;
-}
-
-function makeCar() {
-  const group = new THREE.Group();
-  const paint = new THREE.MeshLambertMaterial({ color: 0xc4c0b4 });
-  const glass = new THREE.MeshLambertMaterial({ color: 0x9ec4c8 });
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.45, 0.9), paint);
-  cabin.position.y = 0.48;
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.38, 0.82), glass);
-  roof.position.set(-0.05, 0.86, 0);
-  group.add(cabin, roof);
-  return group;
-}
+const SCOOTER_COLORS = [0x1e3d72, 0xd4d0c8, 0x8e2420, 0x1c1c1c];
 
 function collectLamps(root) {
   const lamps = [];
@@ -64,7 +21,7 @@ function collectLamps(root) {
 }
 
 function faceAlong(mesh, yaw) {
-  mesh.rotation.y = yaw - Math.PI / 2;
+  mesh.rotation.y = yaw;
 }
 
 const QUEST_BLIP_KEYS = ["yashan", "chaoyang", "market", "stall", "activity", "station", "shrine"];
@@ -81,34 +38,49 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   const lamps = collectLamps(scene);
   const sky = scene.getObjectByName("sky");
   const sun = scene.children.find((node) => node.isDirectionalLight && node.intensity > 0.5);
+  const fill = scene.children.find((node) => node.isDirectionalLight && node !== sun);
   const ambient = scene.children.find((node) => node.isAmbientLight);
+  const hemi = scene.children.find((node) => node.isHemisphereLight);
 
-  const body = makeWalker();
-  const rideMesh = makeScooter(0x1b7a3c);
+  const body = makeCitizen({ shirt: 0x6e8f62, pants: 0x2a3138 });
+  const rideMesh = makeScooterMesh({ color: 0x1b7a3c, hero: true });
   rideMesh.name = "ride-scooter";
-  rideMesh.scale.set(1.55, 1, 1.65);
   scene.add(body, rideMesh);
   const parked = { x: 2.6, z: 0, yaw: 0 };
   const eyeHeight = controls.getState().eyeHeight;
   let rider = null;
   const actors = new THREE.Group();
   actors.name = "street-life";
-  const vehicleMeshes = vehicles.map((vehicle) => {
-    const mesh = vehicle.kind === "car" ? makeCar() : makeScooter();
+  const vehicleMeshes = vehicles.map((vehicle, index) => {
+    const mesh = vehicle.kind === "car"
+      ? makeCarMesh(CAR_COLORS[index % CAR_COLORS.length])
+      : makeScooterMesh({ color: SCOOTER_COLORS[index % SCOOTER_COLORS.length] });
     actors.add(mesh);
     return mesh;
   });
-  const pedMeshes = people.map(() => {
-    const mesh = makeWalker();
-    mesh.scale.setScalar(0.92);
+  const pedMeshes = people.map((_, index) => {
+    const mesh = makeCitizen({ shirt: SHIRTS[index % SHIRTS.length] });
+    mesh.scale.setScalar(0.94 + (index % 3) * 0.03);
     actors.add(mesh);
     return mesh;
   });
   scene.add(actors);
 
   const style = document.createElement("style");
-  style.textContent = "#street-life{position:fixed;right:16px;bottom:96px;z-index:6;display:grid;gap:8px;justify-items:end;font:13px/1.4 'Noto Sans TC',sans-serif;color:#f4f1ea}#street-life[hidden]{display:none}#street-life canvas{width:148px;height:148px;border-radius:50%}#street-life .row{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;max-width:220px}#street-life button{min-height:36px;border:0;border-radius:999px;padding:6px 10px;background:#2c5234;color:#f4f1ea;cursor:pointer}";
+  style.textContent = "#street-life{position:fixed;right:16px;bottom:96px;z-index:6;display:grid;gap:8px;justify-items:end;font:13px/1.4 'Noto Sans TC',sans-serif;color:#f4f1ea}#street-life[hidden]{display:none}#street-life canvas{width:148px;height:148px;border-radius:50%}#street-life .row{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;max-width:220px}#street-life button{min-height:36px;border:0;border-radius:999px;padding:6px 10px;background:#2c5234;color:#f4f1ea;cursor:pointer}#street-grade{position:fixed;inset:0;z-index:3;pointer-events:none;background:radial-gradient(ellipse at center, transparent 58%, rgba(12,8,6,.2) 100%)}#street-grade[hidden]{display:none}#street-grade[data-time='dusk']{background:radial-gradient(ellipse at center, transparent 50%, rgba(64,22,8,.38) 100%)}#street-grade[data-time='night']{background:radial-gradient(ellipse at center, transparent 42%, rgba(2,6,14,.5) 100%)}";
   document.head.append(style);
+  const grade = document.createElement("div");
+  grade.id = "street-grade";
+  document.body.append(grade);
+  for (const lamp of lamps) {
+    const halo = new THREE.Mesh(
+      new THREE.SphereGeometry(0.42, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffe7b0, transparent: true, opacity: 0.28, depthWrite: false, toneMapped: false }),
+    );
+    halo.name = "lamp-halo";
+    halo.visible = false;
+    lamp.add(halo);
+  }
   const panel = document.createElement("div");
   panel.id = "street-life";
   const radar = document.createElement("canvas");
@@ -198,7 +170,7 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
   };
 
   api.update = (dt) => {
-    const look = applyDaylight({ THREE, scene, sky, sun, ambient, renderer, lamps }, api.hour);
+    const look = applyDaylight({ THREE, scene, sky, sun, ambient, hemi, fill, renderer, lamps }, api.hour);
     const mode = controls.getMode();
     if (mode === "walk" && lastMode !== "walk") {
       camera.getWorldDirection(lookDir);
@@ -249,35 +221,51 @@ export function mountStreetLife({ scene, camera, renderer, controls, roads, coll
     stepVehicles(vehicles, lanes, dt, blockers);
     stepPedestrians(people, lanes, dt, colliders);
     const lampsOn = look.lamp > 0.4;
+    const showLamp = (mesh) => {
+      mesh.traverse((node) => {
+        if (node.name === "headlamp" || node.name === "tail-lamp" || node.name === "head-glow") node.visible = lampsOn;
+      });
+    };
     vehicles.forEach((vehicle, index) => {
       const mesh = vehicleMeshes[index];
       mesh.visible = !vehicle.parked;
       mesh.position.set(vehicle.x, 0, vehicle.z);
       faceAlong(mesh, vehicle.yaw);
-      const headlamp = mesh.getObjectByName("headlamp");
-      if (headlamp) headlamp.visible = lampsOn;
+      showLamp(mesh);
     });
     people.forEach((person, index) => {
-      pedMeshes[index].visible = !person.parked;
-      pedMeshes[index].position.set(person.x, 0, person.z);
-      pedMeshes[index].rotation.y = person.yaw;
+      const mesh = pedMeshes[index];
+      mesh.visible = !person.parked;
+      mesh.position.set(person.x, 0, person.z);
+      mesh.rotation.y = person.yaw;
+      person.phase = (person.phase || index) + dt * person.speed * 6.5;
+      poseCitizen(mesh, { phase: person.phase, speed: person.speed });
     });
+    for (const lamp of lamps) {
+      const halo = lamp.getObjectByName("lamp-halo");
+      if (halo) halo.visible = lampsOn;
+    }
     const nearRide = rideReach(state.x, state.z, parked) != null;
     rideMesh.visible = true;
     rideMesh.position.set(parked.x, 0, parked.z);
     faceAlong(rideMesh, parked.yaw);
-    const rideLamp = rideMesh.getObjectByName("headlamp");
-    if (rideLamp) rideLamp.visible = lampsOn;
+    showLamp(rideMesh);
+    grade.dataset.time = night ? "night" : (lampsOn ? "dusk" : "day");
     rideBtn.textContent = api.riding ? "下車" : (nearRide ? "按 F 上車" : "靠近機車");
     if (mode !== "walk") {
       body.visible = false;
       panel.hidden = true;
+      grade.hidden = true;
       return;
     }
     if (state.locked) controls.setLookLocked(false);
     panel.hidden = false;
+    grade.hidden = false;
     body.visible = true;
-    body.position.set(state.x, state.y + (api.riding ? 0.28 : 0), state.z);
+    const pace = Math.hypot(state.vx || 0, state.vz || 0);
+    body.userData.phase = (body.userData.phase || 0) + dt * (api.riding ? 0 : pace) * 6.5;
+    poseCitizen(body, { phase: body.userData.phase, speed: pace, riding: api.riding });
+    body.position.set(state.x, state.y + (api.riding ? SIT_DROP : 0), state.z);
     body.rotation.y = yawState.yaw;
     placeCamera(state);
     radarWait += dt;
